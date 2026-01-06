@@ -1,0 +1,173 @@
+{
+  "name": "Bill Popularity Check",
+  "active": false,
+  "versionId": "1",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * *"
+            }
+          ]
+        }
+      },
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "id": "schedule-trigger-popularity"
+    },
+    {
+      "parameters": {
+        "url": "http://host.docker.internal:8000/bills",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "page",
+              "value": "1"
+            },
+            {
+              "name": "page_size",
+              "value": "50"
+            },
+            {
+              "name": "law_impact_only",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Fetch Recent Law Impact Bills",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [450, 300],
+      "id": "fetch-bills-popularity"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract bills from response\nconst items = $input.all();\nconst response = items[0].json;\nconst bills = response.items || [];\n\n// Return each bill as a separate item for processing\nreturn bills.map(bill => ({ json: bill }));"
+      },
+      "name": "Extract Bills",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [650, 300],
+      "id": "extract-bills-popularity"
+    },
+    {
+      "parameters": {
+        "batchSize": 5,
+        "options": {}
+      },
+      "name": "Split In Batches",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [850, 300],
+      "id": "split-batches-popularity"
+    },
+    {
+      "parameters": {
+        "url": "=https://www.googleapis.com/customsearch/v1",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "key",
+              "value": "YOUR_GOOGLE_API_KEY"
+            },
+            {
+              "name": "cx",
+              "value": "YOUR_SEARCH_ENGINE_ID"
+            },
+            {
+              "name": "q",
+              "value": "={{$json.bill_type.toUpperCase()}} {{$json.bill_number}} {{$json.congress}}th Congress"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Search Web for Bill",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [1050, 300],
+      "continueOnFail": true,
+      "id": "search-web-popularity",
+      "notes": "Replace with your preferred search API (Google Custom Search, Bing, NewsAPI, etc.)\nThis example uses Google Custom Search API."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Determine if bill is popular based on search results\n// The search result and bill data are both available in different ways\n// We'll extract bill data from the search query that was made\n\nconst items = $input.all();\nconst results = [];\n\nfor (let i = 0; i < items.length; i++) {\n  const searchResult = items[i].json;\n  \n  // Get bill data from the input item's binary/pairedItem reference\n  // In n8n, when Split in Batches passes data through Search Web for Bill,\n  // the original bill data is lost. We need to extract it from the query string.\n  \n  // The search query was: \"HR 3616 119th Congress\"\n  // We can get it from the request URL or reconstruct from search results\n  const searchQuery = searchResult?.queries?.request?.[0]?.searchTerms || '';\n  const queryParts = searchQuery.match(/^([A-Z]+)\\s+(\\d+)\\s+(\\d+)th/);\n  \n  if (!queryParts) {\n    console.log('Could not parse query:', searchQuery);\n    continue;\n  }\n  \n  const billType = queryParts[1].toLowerCase();\n  const billNumber = parseInt(queryParts[2], 10);\n  const congress = parseInt(queryParts[3], 10);\n  \n  // Extract search result count\n  let hitCount = 0;\n  let isPopular = false;\n  \n  if (searchResult && !searchResult.error) {\n    // Google Custom Search API format\n    hitCount = parseInt(searchResult.searchInformation?.totalResults || '0', 10);\n    isPopular = hitCount >= 3;\n  }\n  \n  // Get title from search results\n  const title = searchResult?.items?.[0]?.title || `${billType.toUpperCase()} ${billNumber}`;\n  \n  results.push({\n    json: {\n      bill_type: billType,\n      bill_number: billNumber,\n      congress: congress,\n      title: title,\n      popularity_score: hitCount,\n      is_popular: isPopular\n    }\n  });\n}\n\nreturn results;"
+      },
+      "name": "Calculate Popularity",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 300],
+      "id": "calculate-popularity"
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=http://host.docker.internal:8000/bills/{{$json.bill_id}}/popularity",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"is_popular\": {{$json.is_popular}},\n  \"popularity_score\": {{$json.popularity_score}}\n}",
+        "options": {}
+      },
+      "name": "Update Bill Popularity",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [1450, 300],
+      "continueOnFail": true,
+      "id": "update-popularity"
+    },
+    {
+      "parameters": {
+        "amount": 2,
+        "unit": "seconds"
+      },
+      "name": "Wait",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [1650, 300],
+      "id": "wait-popularity",
+      "notes": "Rate limiting delay between API calls"
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [[{"node": "Fetch Recent Law Impact Bills", "type": "main", "index": 0}]]
+    },
+    "Fetch Recent Law Impact Bills": {
+      "main": [[{"node": "Extract Bills", "type": "main", "index": 0}]]
+    },
+    "Extract Bills": {
+      "main": [[{"node": "Split In Batches", "type": "main", "index": 0}]]
+    },
+    "Split In Batches": {
+      "main": [[{"node": "Search Web for Bill", "type": "main", "index": 0}]]
+    },
+    "Search Web for Bill": {
+      "main": [[{"node": "Calculate Popularity", "type": "main", "index": 0}]]
+    },
+    "Calculate Popularity": {
+      "main": [[{"node": "Update Bill Popularity", "type": "main", "index": 0}]]
+    },
+    "Update Bill Popularity": {
+      "main": [[{"node": "Wait", "type": "main", "index": 0}]]
+    },
+    "Wait": {
+      "main": [[{"node": "Split In Batches", "type": "main", "index": 0}]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "pinData": {},
+  "tags": []
+}

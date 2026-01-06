@@ -1,0 +1,91 @@
+name: Deploy to EC2
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_KEY }}
+          SSH_HOST: ${{ secrets.EC2_HOST }}
+          SSH_USER: ${{ secrets.EC2_USER }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H $SSH_HOST >> ~/.ssh/known_hosts
+
+      - name: Deploy to EC2
+        env:
+          SSH_HOST: ${{ secrets.EC2_HOST }}
+          SSH_USER: ${{ secrets.EC2_USER }}
+        run: |
+          ssh -i ~/.ssh/deploy_key $SSH_USER@$SSH_HOST << 'EOF'
+            set -e
+            echo "=== Starting deployment ==="
+            
+            cd /home/$USER/justabill
+            
+            # Pull latest code
+            echo "Pulling latest code..."
+            git fetch origin
+            git reset --hard origin/main
+            
+            # Update .env if needed (preserve secrets)
+            if [ ! -f .env ]; then
+              echo "ERROR: .env file not found!"
+              exit 1
+            fi
+            
+            # Build and restart containers
+            echo "Building and restarting containers..."
+            docker compose -f docker-compose.prod.yml down
+            docker compose -f docker-compose.prod.yml build --no-cache
+            docker compose -f docker-compose.prod.yml up -d
+            
+            # Wait for services to be healthy
+            echo "Waiting for services to be healthy..."
+            sleep 10
+            
+            # Check service status
+            docker compose -f docker-compose.prod.yml ps
+            
+            # Run database migrations if needed
+            echo "Running database migrations..."
+            docker compose -f docker-compose.prod.yml exec -T backend alembic upgrade head || echo "Migration skipped or failed"
+            
+            # Cleanup old images
+            echo "Cleaning up old Docker images..."
+            docker image prune -af --filter "until=24h"
+            
+            echo "=== Deployment complete ==="
+          EOF
+
+      - name: Verify deployment
+        env:
+          SSH_HOST: ${{ secrets.EC2_HOST }}
+          SSH_USER: ${{ secrets.EC2_USER }}
+        run: |
+          ssh -i ~/.ssh/deploy_key $SSH_USER@$SSH_HOST << 'EOF'
+            curl -f http://localhost:8000/health || exit 1
+            echo "Backend health check passed"
+          EOF
+
+      - name: Notify deployment status
+        if: always()
+        run: |
+          if [ ${{ job.status }} == 'success' ]; then
+            echo "✅ Deployment successful"
+          else
+            echo "❌ Deployment failed"
+          fi
