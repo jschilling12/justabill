@@ -55,8 +55,8 @@ export default function Home() {
   const loadPopularBills = async () => {
     try {
       setLoadingPopular(true);
-      // Fetch top 20 popular bills (increased from 10 to show more popular bills)
-      const data = await getBills(1, 20, true);
+      // Fetch top 5 popular bills
+      const data = await getBills(1, 5, true);
       setPopularBills(data.items);
       const stats = await getBillsVoteStats(data.items.map((b: Bill) => b.id));
       setStatsByBill((prev) => ({ ...prev, ...stats }));
