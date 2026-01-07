@@ -369,6 +369,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Summarize Results",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -533,7 +540,7 @@
         ],
         [
           {
-            "node": "Summarize Results",
+            "node": "Split In Batches",
             "type": "main",
             "index": 0
           }
