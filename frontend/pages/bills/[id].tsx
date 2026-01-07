@@ -571,13 +571,29 @@ export default function BillPage() {
                               {section.section_key}: {section.heading}
                             </p>
                             {section.summary_json ? (
-                              <ul className="mt-2 list-disc list-inside space-y-1 text-sm text-gray-600">
-                                {section.summary_json.plain_summary_bullets.slice(0, 5).map((bullet, i) => (
-                                  <li key={i}>{bullet}</li>
-                                ))}
-                              </ul>
+                              section.summary_json.plain_summary_bullets[0]?.startsWith('Error generating') ? (
+                                <div className="mt-2 flex items-center gap-2 text-sm text-amber-600">
+                                  <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                  </svg>
+                                  <span>Summary generating... refresh in a moment</span>
+                                </div>
+                              ) : (
+                                <ul className="mt-2 list-disc list-inside space-y-1 text-sm text-gray-600">
+                                  {section.summary_json.plain_summary_bullets.slice(0, 5).map((bullet, i) => (
+                                    <li key={i}>{bullet}</li>
+                                  ))}
+                                </ul>
+                              )
                             ) : (
-                              <p className="mt-2 text-sm text-gray-600">Summary not available for this section.</p>
+                              <div className="mt-2 flex items-center gap-2 text-sm text-gray-500">
+                                <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                <span>Generating summary...</span>
+                              </div>
                             )}
                           </div>
                         ))}
@@ -651,42 +667,64 @@ export default function BillPage() {
                     </div>
                   )}
                   {section.summary_json ? (
-                    <>
-                      <h4 className="text-sm font-semibold text-gray-700 mb-2">Summary</h4>
-                      <ul className="list-disc list-inside space-y-1 text-sm text-gray-600">
-                        {section.summary_json.plain_summary_bullets.map((bullet, i) => (
-                          <li key={i}>{bullet}</li>
-                        ))}
-                      </ul>
-
-                      {section.evidence_quotes && section.evidence_quotes.length > 0 && (
-                        <div className="mt-4">
-                          <button
-                            onClick={() => toggleSection(section.id)}
-                            className="text-sm text-blue-600 hover:underline"
-                          >
-                            {expandedSections.has(section.id) ? '▼' : '►'} Evidence
-                          </button>
-                          {expandedSections.has(section.id) && (
-                            <div className="mt-2 pl-4 border-l-2 border-blue-200">
-                              {section.evidence_quotes.map((quote, i) => (
-                                <p key={i} className="text-sm text-gray-600 italic mb-2">
-                                  "{quote}"
-                                </p>
-                              ))}
-                            </div>
-                          )}
+                    section.summary_json.plain_summary_bullets[0]?.startsWith('Error generating') ? (
+                      <div className="bg-amber-50 border border-amber-200 rounded p-4">
+                        <div className="flex items-center gap-2">
+                          <svg className="animate-spin h-5 w-5 text-amber-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          <p className="text-sm text-amber-800 font-medium">
+                            Summary is being generated...
+                          </p>
                         </div>
-                      )}
-                    </>
+                        <p className="text-sm text-amber-700 mt-1">
+                          Please refresh the page in a few moments. You can still vote on this section!
+                        </p>
+                      </div>
+                    ) : (
+                      <>
+                        <h4 className="text-sm font-semibold text-gray-700 mb-2">Summary</h4>
+                        <ul className="list-disc list-inside space-y-1 text-sm text-gray-600">
+                          {section.summary_json.plain_summary_bullets.map((bullet, i) => (
+                            <li key={i}>{bullet}</li>
+                          ))}
+                        </ul>
+
+                        {section.evidence_quotes && section.evidence_quotes.length > 0 && (
+                          <div className="mt-4">
+                            <button
+                              onClick={() => toggleSection(section.id)}
+                              className="text-sm text-blue-600 hover:underline"
+                            >
+                              {expandedSections.has(section.id) ? '▼' : '►'} Evidence
+                            </button>
+                            {expandedSections.has(section.id) && (
+                              <div className="mt-2 pl-4 border-l-2 border-blue-200">
+                                {section.evidence_quotes.map((quote, i) => (
+                                  <p key={i} className="text-sm text-gray-600 italic mb-2">
+                                    "{quote}"
+                                  </p>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </>
+                    )
                   ) : (
                     <div className="bg-blue-50 border border-blue-200 rounded p-4">
-                      <p className="text-sm text-blue-900 font-medium mb-1">
-                        💡 AI Summary Not Available
-                      </p>
-                      <p className="text-sm text-blue-700">
-                        To enable AI-generated summaries, add an OpenAI or Anthropic API key to your backend configuration.
-                        You can still vote on this section!
+                      <div className="flex items-center gap-2">
+                        <svg className="animate-spin h-5 w-5 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <p className="text-sm text-blue-900 font-medium">
+                          Generating AI Summary...
+                        </p>
+                      </div>
+                      <p className="text-sm text-blue-700 mt-1">
+                        Please refresh the page in a few moments. You can still vote on this section!
                       </p>
                     </div>
                   )}
