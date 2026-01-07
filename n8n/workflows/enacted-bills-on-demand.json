@@ -141,7 +141,7 @@
     "Has Bill Data": {
       "main": [
         [{"node": "Ingest Bill", "type": "main", "index": 0}],
-        [{"node": "Batch Bills", "type": "main", "index": 0}]
+        []
       ]
     },
     "Ingest Bill": {
