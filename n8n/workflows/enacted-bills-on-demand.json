@@ -346,7 +346,7 @@
       "main": [
         [
           {
-            "node": "Split Presidents",
+            "node": "Split In Batches",
             "type": "main",
             "index": 0
           }
@@ -364,22 +364,11 @@
         ]
       ]
     },
-    "Google Search": {
-      "main": [
-        [
-          {
-            "node": "Calculate Popularity",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Manual Trigger": {
       "main": [
         [
           {
-            "node": "Extract Parameters",
+            "node": "Generate All Presidents",
             "type": "main",
             "index": 0
           }
@@ -405,7 +394,8 @@
             "type": "main",
             "index": 0
           }
-        ]
+        ],
+        []
       ]
     },
     "Fetch Enacted for Popularity": {
