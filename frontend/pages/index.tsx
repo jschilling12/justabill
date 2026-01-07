@@ -25,6 +25,7 @@ export default function Home() {
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [lastFetchTime, setLastFetchTime] = useState<Record<string, number>>({});
   const [refreshCooldown, setRefreshCooldown] = useState<Record<string, number>>({});
+  const [collapsedPresidents, setCollapsedPresidents] = useState<Set<string>>(new Set());
 
   // Read tab from URL on mount
   useEffect(() => {
@@ -211,6 +212,19 @@ export default function Home() {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // Toggle collapse state for a president
+  const togglePresidentCollapse = (presName: string) => {
+    setCollapsedPresidents(prev => {
+      const newSet = new Set(Array.from(prev));
+      if (newSet.has(presName)) {
+        newSet.delete(presName);
+      } else {
+        newSet.add(presName);
+      }
+      return newSet;
+    });
   };
 
   const renderVotePreview = (billId: string) => {
@@ -615,21 +629,38 @@ export default function Home() {
                   const isCurrentTerm = presName === 'Donald Trump 2nd'; // 119th Congress, just started
                   const cooldown = getCooldownRemaining(presName);
                   const presidentId = `president-${presName.replace(/\s+/g, '-')}`;
+                  const isCollapsed = collapsedPresidents.has(presName);
+                  const hasBills = bills.length > 0;
                   
                   return (
                     <div key={presName} id={presidentId} className="bg-white rounded-lg shadow overflow-hidden">
                       {/* President Header - Clickable */}
                       <button
-                        onClick={() => !hasFetched && handleFetchPresidentBills(presName)}
-                        disabled={isFetching || hasFetched}
+                        onClick={() => {
+                          if (hasBills) {
+                            togglePresidentCollapse(presName);
+                          } else if (!hasFetched) {
+                            handleFetchPresidentBills(presName);
+                          }
+                        }}
+                        disabled={isFetching || (!hasBills && hasFetched)}
                         className={`w-full px-6 py-3 border-b text-left transition-colors ${
                           party === 'R' 
                             ? 'bg-red-50 border-red-200 hover:bg-red-100' 
                             : 'bg-blue-50 border-blue-200 hover:bg-blue-100'
-                        } ${isFetching ? 'opacity-75' : ''} ${hasFetched ? 'cursor-default' : ''}`}
+                        } ${isFetching ? 'opacity-75' : ''} ${!hasBills && hasFetched ? 'cursor-default' : 'cursor-pointer'}`}
                       >
                         <div className="flex items-center gap-3">
-                          <span className="text-2xl">🏛️</span>
+                          {/* Collapse/Expand chevron for presidents with bills */}
+                          {hasBills ? (
+                            <span className={`text-gray-500 transition-transform duration-200 ${isCollapsed ? '' : 'rotate-90'}`}>
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                              </svg>
+                            </span>
+                          ) : (
+                            <span className="text-2xl">🏛️</span>
+                          )}
                           <div className="flex-1">
                             <h3 className="font-semibold text-gray-900">
                               President {displayName}
@@ -645,13 +676,16 @@ export default function Home() {
                               <div className="animate-spin h-4 w-4 border-2 border-gray-400 border-t-transparent rounded-full"></div>
                               <span className="text-xs text-gray-500">Fetching...</span>
                             </div>
-                          ) : bills.length > 0 ? (
+                          ) : hasBills ? (
                             <span className={`px-2 py-0.5 text-xs font-medium rounded ${
                               party === 'R' 
                                 ? 'bg-red-100 text-red-800' 
                                 : 'bg-blue-100 text-blue-800'
                             }`}>
                               {bills.length} bill{bills.length !== 1 ? 's' : ''}
+                              <span className="ml-1 text-[10px] opacity-60">
+                                {isCollapsed ? '(click to expand)' : '(click to collapse)'}
+                              </span>
                             </span>
                           ) : hasFetched ? (
                             <span className="text-xs text-gray-400">✓ Checked</span>
@@ -721,7 +755,7 @@ export default function Home() {
                       )}
                       
                       {/* Bills under this president */}
-                      {bills.length > 0 && (
+                      {hasBills && !isCollapsed && (
                         <div className="divide-y divide-gray-200">
                           {bills.map((bill) => (
                             <Link
