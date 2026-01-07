@@ -27,7 +27,7 @@
             },
             {
               "name": "oldest_congress",
-              "value": 110
+              "value": 93
             }
           ]
         },
@@ -38,7 +38,7 @@
       "typeVersion": 3.2,
       "position": [450, 300],
       "notesInFlow": true,
-      "notes": "110th Congress (2007-2009) through current. Adjust oldest_congress to go further back."
+      "notes": "93rd Congress (1973-1975) is the earliest with full data. Goes back to Nixon/Ford era."
     },
     {
       "parameters": {

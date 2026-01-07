@@ -216,12 +216,25 @@ export interface President {
 }
 
 export const PRESIDENTS: President[] = [
+  // Current
   { name: 'Donald Trump', party: 'R', startDate: '2025-01-20', endDate: '2029-01-20' },
   { name: 'Joe Biden', party: 'D', startDate: '2021-01-20', endDate: '2025-01-20' },
+  // 2000s-2020s
   { name: 'Donald Trump', party: 'R', startDate: '2017-01-20', endDate: '2021-01-20' },
   { name: 'Barack Obama', party: 'D', startDate: '2009-01-20', endDate: '2017-01-20' },
   { name: 'George W. Bush', party: 'R', startDate: '2001-01-20', endDate: '2009-01-20' },
+  // 1990s
   { name: 'Bill Clinton', party: 'D', startDate: '1993-01-20', endDate: '2001-01-20' },
+  { name: 'George H.W. Bush', party: 'R', startDate: '1989-01-20', endDate: '1993-01-20' },
+  // 1980s
+  { name: 'Ronald Reagan', party: 'R', startDate: '1981-01-20', endDate: '1989-01-20' },
+  // 1970s
+  { name: 'Jimmy Carter', party: 'D', startDate: '1977-01-20', endDate: '1981-01-20' },
+  { name: 'Gerald Ford', party: 'R', startDate: '1974-08-09', endDate: '1977-01-20' },
+  { name: 'Richard Nixon', party: 'R', startDate: '1969-01-20', endDate: '1974-08-09' },
+  // 1960s (in case any old bills)
+  { name: 'Lyndon B. Johnson', party: 'D', startDate: '1963-11-22', endDate: '1969-01-20' },
+  { name: 'John F. Kennedy', party: 'D', startDate: '1961-01-20', endDate: '1963-11-22' },
 ];
 
 export function getPresidentForDate(dateString: string | null | undefined): President | null {
