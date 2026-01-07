@@ -279,7 +279,7 @@ export default function Home() {
                   <div className="p-5">
                     <div className="flex items-center justify-between mb-2">
                       <span className={`text-2xl ${index === 0 ? '' : 'opacity-70'}`}>
-                        {index === 0 ? '🥇' : index === 1 ? '🥈' : '🥉'}
+                        🔥
                       </span>
                       {bill.popularity_score && bill.popularity_score > 0 && (
                         <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-orange-100 text-orange-800">
