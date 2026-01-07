@@ -108,6 +108,37 @@
     },
     {
       "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-bill-data",
+              "leftValue": "={{ $json.bill_number }}",
+              "rightValue": "",
+              "operator": {
+                "type": "exists",
+                "operation": "exists"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Check If Valid Bill",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1350,
+        300
+      ]
+    },
+    {
+      "parameters": {
         "method": "POST",
         "url": "http://98.94.94.17/api/ingest/bill",
         "authentication": "genericCredentialType",
@@ -123,8 +154,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        1450,
-        300
+        1550,
+        200
       ],
       "credentials": {
         "httpHeaderAuth": {
@@ -146,8 +177,20 @@
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
       "position": [
-        1650,
-        300
+        1750,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// No-op to merge paths\nreturn $input.all();"
+      },
+      "name": "Merge Paths",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1750,
+        400
       ]
     },
     {
@@ -201,7 +244,7 @@
       "main": [
         [
           {
-            "node": "Ingest Enacted Bill",
+            "node": "Check If Valid Bill",
             "type": "main",
             "index": 0
           }
@@ -209,6 +252,24 @@
         [
           {
             "node": "Summarize Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check If Valid Bill": {
+      "main": [
+        [
+          {
+            "node": "Ingest Enacted Bill",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merge Paths",
             "type": "main",
             "index": 0
           }
@@ -227,6 +288,17 @@
       ]
     },
     "Wait (Rate Limit)": {
+      "main": [
+        [
+          {
+            "node": "Merge Paths",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Paths": {
       "main": [
         [
           {
