@@ -108,11 +108,10 @@
     {
       "parameters": {
         "conditions": {
-          "string": [
+          "boolean": [
             {
-              "value1": "={{$json.no_bills}}",
-              "operation": "notEqual",
-              "value2": "true"
+              "value1": "={{!$json.no_bills}}",
+              "value2": true
             }
           ]
         }
