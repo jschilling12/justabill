@@ -41,7 +41,7 @@ export default function Home() {
     try {
       setLoadingLawImpact(true);
       // First page of likely law-impact bills (e.g., HR/S in latest Congress)
-      const data = await getBills(1, 10, undefined, true);
+      const data = await getBills(1, 7, undefined, true);
       setLawImpactBills(data.items);
       const stats = await getBillsVoteStats(data.items.map((b: Bill) => b.id));
       setStatsByBill((prev) => ({ ...prev, ...stats }));
@@ -191,7 +191,7 @@ export default function Home() {
                           {bill.title || 'No title available'}
                         </p>
                         <div className="mt-1 flex items-center space-x-3 text-[11px] text-gray-500">
-                          <span>{bill.congress}th Congress</span>
+                          <span className="capitalize">{bill.status?.replace(/_/g, ' ') || 'Status unknown'}</span>
                           {bill.latest_action_date && (
                             <span>Updated: {formatDate(bill.latest_action_date)}</span>
                           )}
@@ -258,7 +258,7 @@ export default function Home() {
                           {bill.title || 'No title available'}
                         </p>
                         <div className="mt-1 flex items-center space-x-3 text-[11px] text-gray-500">
-                          <span>{bill.congress}th Congress</span>
+                          <span className="capitalize">{bill.status?.replace(/_/g, ' ') || 'Status unknown'}</span>
                           {bill.latest_action_date && (
                             <span>Updated: {formatDate(bill.latest_action_date)}</span>
                           )}
@@ -323,12 +323,7 @@ export default function Home() {
                         {bill.title || 'No title available'}
                       </p>
                       <div className="mt-2 flex items-center space-x-4 text-xs text-gray-500">
-                        <span>{bill.congress}th Congress</span>
-                        {bill.status && (
-                          <span className="px-2 py-1 bg-gray-100 rounded">
-                            {bill.status.replace('_', ' ')}
-                          </span>
-                        )}
+                        <span className="capitalize">{bill.status?.replace(/_/g, ' ') || 'Status unknown'}</span>
                         {bill.latest_action_date && (
                           <span>Updated: {formatDate(bill.latest_action_date)}</span>
                         )}
