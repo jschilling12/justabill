@@ -27,6 +27,35 @@ export default function Home() {
   const [refreshCooldown, setRefreshCooldown] = useState<Record<string, number>>({});
   const [collapsedPresidents, setCollapsedPresidents] = useState<Set<string>>(new Set());
 
+  // Load persisted state from localStorage on mount
+  useEffect(() => {
+    try {
+      const storedFetchTimes = localStorage.getItem('justabill_lastFetchTime');
+      const storedFetchedPresidents = localStorage.getItem('justabill_fetchedPresidents');
+      
+      if (storedFetchTimes) {
+        const parsed = JSON.parse(storedFetchTimes);
+        setLastFetchTime(parsed);
+        // Also set refreshCooldown for any that are still within 5 min window
+        const now = Date.now();
+        const activeCooldowns: Record<string, number> = {};
+        for (const [key, time] of Object.entries(parsed)) {
+          if (now - (time as number) < 300000) { // 5 minutes in ms
+            activeCooldowns[key] = time as number;
+          }
+        }
+        setRefreshCooldown(activeCooldowns);
+      }
+      
+      if (storedFetchedPresidents) {
+        const parsed = JSON.parse(storedFetchedPresidents);
+        setFetchedPresidents(new Set(parsed));
+      }
+    } catch (e) {
+      console.error('Error loading persisted state:', e);
+    }
+  }, []);
+
   // Read tab from URL on mount
   useEffect(() => {
     if (router.isReady) {
@@ -56,6 +85,20 @@ export default function Home() {
       { shallow: true }
     );
   };
+
+  // Persist lastFetchTime to localStorage
+  useEffect(() => {
+    if (Object.keys(lastFetchTime).length > 0) {
+      localStorage.setItem('justabill_lastFetchTime', JSON.stringify(lastFetchTime));
+    }
+  }, [lastFetchTime]);
+
+  // Persist fetchedPresidents to localStorage
+  useEffect(() => {
+    if (fetchedPresidents.size > 0) {
+      localStorage.setItem('justabill_fetchedPresidents', JSON.stringify(Array.from(fetchedPresidents)));
+    }
+  }, [fetchedPresidents]);
 
   // Cooldown timer effect
   useEffect(() => {
@@ -133,8 +176,8 @@ export default function Home() {
   const loadEnactedBills = async () => {
     try {
       setLoadingEnacted(true);
-      // Fetch bills that have been signed into law
-      const data = await getBills(1, 10, undefined, undefined, 'enacted');
+      // Fetch ALL enacted bills (high page size to capture multiple presidents)
+      const data = await getBills(1, 200, undefined, undefined, 'enacted');
       setEnactedBills(data.items);
       const stats = await getBillsVoteStats(data.items.map((b: Bill) => b.id));
       setStatsByBill((prev) => ({ ...prev, ...stats }));
@@ -187,10 +230,11 @@ export default function Home() {
       setLastFetchTime(prev => ({ ...prev, [apiName]: Date.now() }));
       setRefreshCooldown(prev => ({ ...prev, [apiName]: Date.now() }));
       
-      // Wait a moment then reload enacted bills
-      setTimeout(() => {
-        loadEnactedBills();
-      }, 3000); // Give n8n time to ingest some bills
+      // Reload enacted bills multiple times as n8n ingests them
+      // First reload after 3s, then 10s, then 30s to catch stragglers
+      setTimeout(() => loadEnactedBills(), 3000);
+      setTimeout(() => loadEnactedBills(), 10000);
+      setTimeout(() => loadEnactedBills(), 30000);
       
     } catch (error: any) {
       console.error('Error fetching president bills:', error);
