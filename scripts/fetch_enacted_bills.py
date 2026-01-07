@@ -6,9 +6,8 @@ from time import sleep
 
 # President-Congress mapping
 PRESIDENTS = [
-    {"name": "Donald Trump 2nd", "congresses": [119]},
+    {"name": "Donald Trump 2nd", "congresses": [115, 116, 119]},
     {"name": "Joe Biden", "congresses": [117, 118]},
-    {"name": "Donald Trump", "congresses": [115, 116]},
     {"name": "Barack Obama", "congresses": [111, 112, 113, 114]},
     {"name": "George W. Bush", "congresses": [107, 108, 109, 110]},
     {"name": "Bill Clinton", "congresses": [103, 104, 105, 106]},

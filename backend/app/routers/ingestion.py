@@ -369,9 +369,8 @@ def queue_summarization_tasks(bill_id: UUID):
 
 # President to Congress mapping for on-demand fetching
 PRESIDENT_CONGRESS_MAP = {
-    "Donald Trump 2nd": {"start": 119, "end": 119, "years": "2025-2029"},
+    "Donald Trump 2nd": {"start": 115, "end": 119, "years": "2017-2021, 2025-2029"},
     "Joe Biden": {"start": 117, "end": 118, "years": "2021-2025"},
-    "Donald Trump": {"start": 115, "end": 116, "years": "2017-2021"},
     "Barack Obama": {"start": 111, "end": 114, "years": "2009-2017"},
     "George W. Bush": {"start": 107, "end": 110, "years": "2001-2009"},
     "Bill Clinton": {"start": 103, "end": 106, "years": "1993-2001"},

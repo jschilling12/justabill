@@ -11,7 +11,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Generate list of all presidents with their congress sessions\nconst presidents = [\n  { name: \"Donald Trump 2nd\", congresses: [119] },\n  { name: \"Joe Biden\", congresses: [117, 118] },\n  { name: \"Donald Trump\", congresses: [115, 116] },\n  { name: \"Barack Obama\", congresses: [111, 112, 113, 114] },\n  { name: \"George W. Bush\", congresses: [107, 108, 109, 110] },\n  { name: \"Bill Clinton\", congresses: [103, 104, 105, 106] },\n  { name: \"George H.W. Bush\", congresses: [101, 102] }\n];\n\n// Flatten to one item per congress session\nconst items = [];\nfor (const pres of presidents) {\n  for (const congress of pres.congresses) {\n    items.push({\n      json: {\n        president: pres.name,\n        congress: congress\n      }\n    });\n  }\n}\n\nreturn items;"
+        "jsCode": "// Generate list of all presidents with their congress sessions\nconst presidents = [\n  { name: \"Donald Trump 2nd\", congresses: [115, 116, 119] },\n  { name: \"Joe Biden\", congresses: [117, 118] },\n  { name: \"Barack Obama\", congresses: [111, 112, 113, 114] },\n  { name: \"George W. Bush\", congresses: [107, 108, 109, 110] },\n  { name: \"Bill Clinton\", congresses: [103, 104, 105, 106] },\n  { name: \"George H.W. Bush\", congresses: [101, 102] }\n];\n\n// Flatten to one item per congress session\nconst items = [];\nfor (const pres of presidents) {\n  for (const congress of pres.congresses) {\n    items.push({\n      json: {\n        president: pres.name,\n        congress: congress\n      }\n    });\n  }\n}\n\nreturn items;"
       },
       "name": "Generate Congress Sessions",
       "type": "n8n-nodes-base.code",

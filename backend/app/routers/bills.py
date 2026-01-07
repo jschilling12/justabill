@@ -299,9 +299,8 @@ async def get_popular_bills_by_president(
     
     # President date ranges for grouping
     PRESIDENT_RANGES = {
-        "Donald Trump 2nd": ("2025-01-20", "2029-01-20"),
+        "Donald Trump 2nd": ("2017-01-20", "2029-01-20"),
         "Joe Biden": ("2021-01-20", "2025-01-20"),
-        "Donald Trump": ("2017-01-20", "2021-01-20"),
         "Barack Obama": ("2009-01-20", "2017-01-20"),
         "George W. Bush": ("2001-01-20", "2009-01-20"),
         "Bill Clinton": ("1993-01-20", "2001-01-20"),

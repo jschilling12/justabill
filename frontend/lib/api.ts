@@ -216,11 +216,10 @@ export interface President {
 }
 
 export const PRESIDENTS: President[] = [
-  // Current
-  { name: 'Donald Trump', party: 'R', startDate: '2025-01-20', endDate: '2029-01-20' },
+  // Current & Combined Trump terms
+  { name: 'Donald Trump 2nd', party: 'R', startDate: '2017-01-20', endDate: '2029-01-20' },
   { name: 'Joe Biden', party: 'D', startDate: '2021-01-20', endDate: '2025-01-20' },
   // 2000s-2020s
-  { name: 'Donald Trump', party: 'R', startDate: '2017-01-20', endDate: '2021-01-20' },
   { name: 'Barack Obama', party: 'D', startDate: '2009-01-20', endDate: '2017-01-20' },
   { name: 'George W. Bush', party: 'R', startDate: '2001-01-20', endDate: '2009-01-20' },
   // 1990s
