@@ -380,4 +380,38 @@ export async function updateMeAffiliation(affiliation_raw: string | null): Promi
   return response.data;
 }
 
+// Fetch enacted bills for a specific president (triggers n8n workflow)
+export interface FetchEnactedResponse {
+  status: string;
+  president: string;
+  congress_range: {
+    start: number;
+    end: number;
+    years: string;
+  };
+  message?: string;
+}
+
+export async function fetchEnactedByPresident(presidentName: string): Promise<FetchEnactedResponse> {
+  const response = await api.post(`/ingest/fetch-enacted-by-president?president_name=${encodeURIComponent(presidentName)}`);
+  return response.data;
+}
+
+// President to Congress mapping (client-side reference)
+export const PRESIDENT_CONGRESS_MAP: Record<string, { start: number; end: number; years: string }> = {
+  "Donald Trump 2nd": { start: 119, end: 119, years: "2025-2029" },
+  "Joe Biden": { start: 117, end: 118, years: "2021-2025" },
+  "Donald Trump": { start: 115, end: 116, years: "2017-2021" },
+  "Barack Obama": { start: 111, end: 114, years: "2009-2017" },
+  "George W. Bush": { start: 107, end: 110, years: "2001-2009" },
+  "Bill Clinton": { start: 103, end: 106, years: "1993-2001" },
+  "George H.W. Bush": { start: 101, end: 102, years: "1989-1993" },
+  "Ronald Reagan": { start: 97, end: 100, years: "1981-1989" },
+  "Jimmy Carter": { start: 95, end: 96, years: "1977-1981" },
+  "Gerald Ford": { start: 94, end: 94, years: "1974-1977" },
+  "Richard Nixon": { start: 91, end: 93, years: "1969-1974" },
+  "Lyndon B. Johnson": { start: 89, end: 90, years: "1963-1969" },
+  "John F. Kennedy": { start: 87, end: 88, years: "1961-1963" },
+};
+
 export default api;

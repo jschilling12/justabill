@@ -1,0 +1,272 @@
+{
+  "name": "Enacted Bills On-Demand",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "enacted-bills-fetch",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [250, 300],
+      "webhookId": "enacted-bills-on-demand"
+    },
+    {
+      "parameters": {
+        "values": {
+          "number": [
+            {
+              "name": "start_congress",
+              "value": "={{ $json.body.start_congress || 119 }}"
+            },
+            {
+              "name": "end_congress",
+              "value": "={{ $json.body.end_congress || 119 }}"
+            }
+          ],
+          "string": [
+            {
+              "name": "president_name",
+              "value": "={{ $json.body.president_name || 'Unknown' }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Extract Parameters",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generate array of congress numbers from start to end\nconst start = $input.first().json.start_congress;\nconst end = $input.first().json.end_congress;\nconst presName = $input.first().json.president_name;\n\nconst congresses = [];\nfor (let c = start; c >= end; c--) {\n  congresses.push({ congress: c, president_name: presName });\n}\n\nreturn congresses;"
+      },
+      "name": "Generate Congress List",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.congress.gov/v3/bill/{{ $json.congress }}?limit=250&sort=updateDate+desc",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "api_key",
+              "value": "{{ $env.CONGRESS_API_KEY }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "name": "Fetch Bills from Congress.gov",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [850, 300],
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "maxTries": 3
+    },
+    {
+      "parameters": {
+        "jsCode": "// Filter for enacted bills only and extract relevant data\nconst bills = $input.first().json.bills || [];\n\nconst enactedBills = bills.filter(bill => {\n  const latestAction = (bill.latestAction?.text || '').toLowerCase();\n  return latestAction.includes('became public law') || \n         latestAction.includes('became law') ||\n         latestAction.includes('signed by president');\n});\n\n// Map to our ingestion format\nreturn enactedBills.map(bill => {\n  const billType = bill.type?.toLowerCase() || 'hr';\n  const billNumber = bill.number || 0;\n  const congress = bill.congress || 119;\n  \n  return {\n    congress: congress,\n    bill_type: billType,\n    bill_number: parseInt(billNumber)\n  };\n});"
+      },
+      "name": "Filter Enacted Bills",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "batchSize": 5,
+        "options": {}
+      },
+      "name": "Split In Batches",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [1250, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://98.94.94.17/api/ingest/bill",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ congress: $json.congress, bill_type: $json.bill_type, bill_number: $json.bill_number }) }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "name": "Ingest Enacted Bill",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1450, 300],
+      "continueOnFail": true,
+      "retryOnFail": true,
+      "waitBetweenTries": 3000,
+      "maxTries": 2
+    },
+    {
+      "parameters": {
+        "amount": 2,
+        "unit": "seconds"
+      },
+      "name": "Wait (Rate Limit)",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [1650, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Summarize results\nconst items = $input.all();\n\nlet success = 0;\nlet failed = 0;\nlet skipped = 0;\n\nfor (const item of items) {\n  if (item.json.error) {\n    failed++;\n  } else if (item.json.status === 'unchanged' || item.json.status === 'partial') {\n    skipped++;\n  } else {\n    success++;\n  }\n}\n\nreturn [{\n  json: {\n    total_processed: items.length,\n    success: success,\n    failed: failed,\n    skipped: skipped,\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "name": "Summarize Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1850, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [2050, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Extract Parameters",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Parameters": {
+      "main": [
+        [
+          {
+            "node": "Generate Congress List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Congress List": {
+      "main": [
+        [
+          {
+            "node": "Fetch Bills from Congress.gov",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Bills from Congress.gov": {
+      "main": [
+        [
+          {
+            "node": "Filter Enacted Bills",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Enacted Bills": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split In Batches": {
+      "main": [
+        [
+          {
+            "node": "Ingest Enacted Bill",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Summarize Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ingest Enacted Bill": {
+      "main": [
+        [
+          {
+            "node": "Wait (Rate Limit)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait (Rate Limit)": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Summarize Results": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "justabill"
+    },
+    {
+      "name": "enacted"
+    },
+    {
+      "name": "on-demand"
+    }
+  ]
+}

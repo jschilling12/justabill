@@ -365,3 +365,103 @@ def queue_summarization_tasks(bill_id: UUID):
         logger.info(f"Queued {len(sections)} summarization tasks for bill {bill_id}")
     finally:
         db.close()
+
+
+# President to Congress mapping for on-demand fetching
+PRESIDENT_CONGRESS_MAP = {
+    "Donald Trump 2nd": {"start": 119, "end": 119, "years": "2025-2029"},
+    "Joe Biden": {"start": 117, "end": 118, "years": "2021-2025"},
+    "Donald Trump": {"start": 115, "end": 116, "years": "2017-2021"},
+    "Barack Obama": {"start": 111, "end": 114, "years": "2009-2017"},
+    "George W. Bush": {"start": 107, "end": 110, "years": "2001-2009"},
+    "Bill Clinton": {"start": 103, "end": 106, "years": "1993-2001"},
+    "George H.W. Bush": {"start": 101, "end": 102, "years": "1989-1993"},
+    "Ronald Reagan": {"start": 97, "end": 100, "years": "1981-1989"},
+    "Jimmy Carter": {"start": 95, "end": 96, "years": "1977-1981"},
+    "Gerald Ford": {"start": 94, "end": 94, "years": "1974-1977"},
+    "Richard Nixon": {"start": 91, "end": 93, "years": "1969-1974"},
+    "Lyndon B. Johnson": {"start": 89, "end": 90, "years": "1963-1969"},
+    "John F. Kennedy": {"start": 87, "end": 88, "years": "1961-1963"},
+}
+
+
+@router.post("/fetch-enacted-by-president")
+async def fetch_enacted_by_president(
+    president_name: str,
+    _admin: None = Depends(require_admin_key),
+):
+    """
+    Trigger n8n workflow to fetch enacted bills for a specific president's term.
+    This calls the n8n webhook which then fetches and ingests the bills.
+    """
+    import httpx
+    import os
+    
+    # Normalize the president name for lookup
+    # Handle "Donald Trump" appearing twice (both terms)
+    lookup_name = president_name
+    
+    if president_name not in PRESIDENT_CONGRESS_MAP:
+        # Try to find a partial match
+        for key in PRESIDENT_CONGRESS_MAP:
+            if president_name in key or key in president_name:
+                lookup_name = key
+                break
+    
+    if lookup_name not in PRESIDENT_CONGRESS_MAP:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown president: {president_name}. Available: {list(PRESIDENT_CONGRESS_MAP.keys())}"
+        )
+    
+    congress_range = PRESIDENT_CONGRESS_MAP[lookup_name]
+    
+    # Get n8n webhook URL from environment
+    n8n_webhook_url = os.getenv("N8N_ENACTED_WEBHOOK_URL")
+    if not n8n_webhook_url:
+        raise HTTPException(
+            status_code=500,
+            detail="N8N_ENACTED_WEBHOOK_URL not configured"
+        )
+    
+    try:
+        async with httpx.AsyncClient(timeout=300.0) as client:
+            response = await client.post(
+                n8n_webhook_url,
+                json={
+                    "president_name": lookup_name,
+                    "start_congress": congress_range["start"],
+                    "end_congress": congress_range["end"],
+                }
+            )
+            
+            if response.status_code >= 400:
+                logger.error(f"n8n webhook error: {response.status_code} - {response.text}")
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"n8n workflow failed: {response.text}"
+                )
+            
+            result = response.json() if response.text else {}
+            
+            return {
+                "status": "triggered",
+                "president": lookup_name,
+                "congress_range": congress_range,
+                "n8n_result": result,
+            }
+            
+    except httpx.TimeoutException:
+        # The workflow might still be running, which is fine
+        return {
+            "status": "triggered_async",
+            "president": lookup_name,
+            "congress_range": congress_range,
+            "message": "Workflow triggered but response timed out. Bills will be ingested in the background.",
+        }
+    except Exception as e:
+        logger.error(f"Error triggering n8n workflow: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to trigger n8n workflow: {str(e)}"
+        )

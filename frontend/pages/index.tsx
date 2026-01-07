@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { getBills, getBillsVoteStats, Bill, VoteStats, BillStatus, BILL_STATUS_LABELS, ACTIVE_STATUSES, getPresidentForDate, PRESIDENTS, President } from '../lib/api';
+import { getBills, getBillsVoteStats, Bill, VoteStats, BillStatus, BILL_STATUS_LABELS, ACTIVE_STATUSES, getPresidentForDate, PRESIDENTS, President, fetchEnactedByPresident, PRESIDENT_CONGRESS_MAP } from '../lib/api';
 
 export default function Home() {
   const [bills, setBills] = useState<Bill[]>([]);
@@ -16,6 +16,11 @@ export default function Home() {
   const [statsByBill, setStatsByBill] = useState<Record<string, VoteStats>>({});
   const [statusFilter, setStatusFilter] = useState<BillStatus | ''>('');
   const [activeTab, setActiveTab] = useState<'voting' | 'enacted'>('voting');
+  
+  // On-demand president fetching
+  const [fetchingPresident, setFetchingPresident] = useState<string | null>(null);
+  const [fetchedPresidents, setFetchedPresidents] = useState<Set<string>>(new Set());
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   useEffect(() => {
     loadBills();
@@ -86,6 +91,45 @@ export default function Home() {
       console.error('Error loading enacted bills:', error);
     } finally {
       setLoadingEnacted(false);
+    }
+  };
+
+  // Handle clicking on a president to fetch their enacted bills
+  const handleFetchPresidentBills = async (presidentName: string) => {
+    // Map display name to API name
+    let apiName = presidentName;
+    
+    // Special handling for Trump's two terms
+    if (presidentName === 'Donald Trump') {
+      // Check if we're looking at 2025+ (2nd term) or 2017-2021 (1st term)
+      // We'll need to determine this from context. For now, use the exact match logic
+      const hasTrump2nd = Object.keys(PRESIDENT_CONGRESS_MAP).includes('Donald Trump 2nd');
+      // If the president header shows 2025-2029, it's 2nd term
+      // This will be handled by the onClick context
+    }
+    
+    if (fetchingPresident || fetchedPresidents.has(apiName)) return;
+    
+    setFetchingPresident(apiName);
+    setFetchError(null);
+    
+    try {
+      const result = await fetchEnactedByPresident(apiName);
+      console.log('Fetch result:', result);
+      
+      // Mark as fetched
+      setFetchedPresidents(prev => new Set([...prev, apiName]));
+      
+      // Wait a moment then reload enacted bills
+      setTimeout(() => {
+        loadEnactedBills();
+      }, 3000); // Give n8n time to ingest some bills
+      
+    } catch (error: any) {
+      console.error('Error fetching president bills:', error);
+      setFetchError(error?.response?.data?.detail || error.message || 'Failed to fetch bills');
+    } finally {
+      setFetchingPresident(null);
     }
   };
 
@@ -453,8 +497,13 @@ export default function Home() {
             <div className="bg-white rounded-lg shadow px-6 py-4">
               <h2 className="text-xl font-semibold text-gray-900">✅ Signed into Law</h2>
               <p className="text-sm text-gray-500 mt-1">
-                Bills grouped by the President who signed them. View how the community voted.
+                Click on a president to load enacted bills from their term. Bills are fetched on-demand.
               </p>
+              {fetchError && (
+                <div className="mt-2 text-sm text-red-600 bg-red-50 px-3 py-2 rounded">
+                  {fetchError}
+                </div>
+              )}
             </div>
             
             {loadingEnacted ? (
@@ -462,103 +511,129 @@ export default function Home() {
                 <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-green-600 mx-auto"></div>
                 <p className="mt-2 text-gray-600">Loading enacted bills...</p>
               </div>
-            ) : enactedBills.length === 0 ? (
-              <div className="bg-white rounded-lg shadow px-6 py-12 text-center text-gray-500">
-                <p className="text-lg">📜 No enacted bills yet</p>
-                <p className="mt-2 text-sm">Bills that get signed into law will appear here.</p>
-              </div>
             ) : (
-              /* Group bills by president */
+              /* Show all presidents - grouped with bills if available */
               (() => {
-                const grouped = new Map<string, { president: President | null; bills: Bill[] }>();
-                
+                // Group existing bills by president
+                const billsByPresident = new Map<string, Bill[]>();
                 for (const bill of enactedBills) {
                   const pres = getPresidentForDate(bill.latest_action_date);
                   const key = pres ? pres.name : 'Other';
-                  
-                  if (!grouped.has(key)) {
-                    grouped.set(key, { president: pres, bills: [] });
+                  if (!billsByPresident.has(key)) {
+                    billsByPresident.set(key, []);
                   }
-                  grouped.get(key)!.bills.push(bill);
+                  billsByPresident.get(key)!.push(bill);
                 }
                 
-                return Array.from(grouped.entries()).map(([presName, { president, bills }]) => (
-                  <div key={presName} className="bg-white rounded-lg shadow overflow-hidden">
-                    {/* President Header */}
-                    <div className={`px-6 py-3 border-b ${
-                      president?.party === 'R' 
-                        ? 'bg-red-50 border-red-200' 
-                        : president?.party === 'D' 
-                          ? 'bg-blue-50 border-blue-200'
-                          : 'bg-gray-50 border-gray-200'
-                    }`}>
-                      <div className="flex items-center gap-3">
-                        <span className="text-2xl">🏛️</span>
-                        <div>
-                          <h3 className="font-semibold text-gray-900">
-                            President {presName}
-                          </h3>
-                          <p className="text-xs text-gray-500">
-                            {president ? (
-                              <>
-                                {president.party === 'R' ? 'Republican' : 'Democrat'} • 
-                                {' '}{new Date(president.startDate).getFullYear()} - {new Date(president.endDate).getFullYear()}
-                              </>
-                            ) : 'Unknown term'}
-                          </p>
-                        </div>
-                        <span className={`ml-auto px-2 py-0.5 text-xs font-medium rounded ${
-                          president?.party === 'R' 
-                            ? 'bg-red-100 text-red-800' 
-                            : president?.party === 'D' 
-                              ? 'bg-blue-100 text-blue-800'
-                              : 'bg-gray-100 text-gray-800'
-                        }`}>
-                          {bills.length} bill{bills.length !== 1 ? 's' : ''}
-                        </span>
-                      </div>
-                    </div>
-                    
-                    {/* Bills under this president */}
-                    <div className="divide-y divide-gray-200">
-                      {bills.map((bill) => (
-                        <Link
-                          key={bill.id}
-                          href={`/bills/${bill.id}`}
-                          className="block px-6 py-4 hover:bg-green-50 transition-colors"
-                        >
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2">
-                                <span className="text-green-600">✓</span>
-                                <h4 className="text-sm font-medium text-gray-900">
-                                  {bill.bill_type.toUpperCase()}. {bill.bill_number}
-                                  {extractShortTitle(bill.title) && (
-                                    <span className="font-normal text-gray-700"> - {extractShortTitle(bill.title)}</span>
-                                  )}
-                                </h4>
-                              </div>
-                              <p className="mt-1 text-xs text-gray-600 line-clamp-1">
-                                {bill.title || 'No title available'}
-                              </p>
-                              <div className="mt-1 flex items-center gap-3 text-xs text-gray-500">
-                                {bill.latest_action_date && (
-                                  <span>Enacted: {formatDate(bill.latest_action_date)}</span>
-                                )}
-                              </div>
-                              {renderVotePreview(bill.id)}
-                            </div>
-                            <div className="ml-3 flex-shrink-0">
-                              <svg className="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                              </svg>
-                            </div>
+                // Create list of all presidents to show
+                const allPresidents = Object.entries(PRESIDENT_CONGRESS_MAP).map(([name, range]) => {
+                  const party = PRESIDENTS.find(p => p.name === name || 
+                    (name === 'Donald Trump 2nd' && p.name === 'Donald Trump' && p.startDate === '2025-01-20') ||
+                    (name === 'Donald Trump' && p.name === 'Donald Trump' && p.startDate === '2017-01-20')
+                  )?.party || 'R';
+                  return { name, ...range, party };
+                });
+                
+                return allPresidents.map(({ name: presName, start, end, years, party }) => {
+                  const bills = billsByPresident.get(presName.replace(' 2nd', '')) || [];
+                  const isFetching = fetchingPresident === presName;
+                  const hasFetched = fetchedPresidents.has(presName);
+                  const displayName = presName.replace(' 2nd', '');
+                  const isSecondTerm = presName.includes('2nd');
+                  
+                  return (
+                    <div key={presName} className="bg-white rounded-lg shadow overflow-hidden">
+                      {/* President Header - Clickable */}
+                      <button
+                        onClick={() => handleFetchPresidentBills(presName)}
+                        disabled={isFetching}
+                        className={`w-full px-6 py-3 border-b text-left transition-colors ${
+                          party === 'R' 
+                            ? 'bg-red-50 border-red-200 hover:bg-red-100' 
+                            : 'bg-blue-50 border-blue-200 hover:bg-blue-100'
+                        } ${isFetching ? 'opacity-75' : ''}`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="text-2xl">🏛️</span>
+                          <div className="flex-1">
+                            <h3 className="font-semibold text-gray-900">
+                              President {displayName}
+                              {isSecondTerm && <span className="text-xs text-gray-500 ml-1">(2nd term)</span>}
+                            </h3>
+                            <p className="text-xs text-gray-500">
+                              {party === 'R' ? 'Republican' : 'Democrat'} • {years} • Congress {end}-{start}
+                            </p>
                           </div>
-                        </Link>
-                      ))}
+                          
+                          {isFetching ? (
+                            <div className="flex items-center gap-2">
+                              <div className="animate-spin h-4 w-4 border-2 border-gray-400 border-t-transparent rounded-full"></div>
+                              <span className="text-xs text-gray-500">Fetching...</span>
+                            </div>
+                          ) : bills.length > 0 ? (
+                            <span className={`px-2 py-0.5 text-xs font-medium rounded ${
+                              party === 'R' 
+                                ? 'bg-red-100 text-red-800' 
+                                : 'bg-blue-100 text-blue-800'
+                            }`}>
+                              {bills.length} bill{bills.length !== 1 ? 's' : ''}
+                            </span>
+                          ) : hasFetched ? (
+                            <span className="text-xs text-gray-400">No bills found</span>
+                          ) : (
+                            <span className="text-xs text-gray-400 flex items-center gap-1">
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                              </svg>
+                              Click to load
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                      
+                      {/* Bills under this president */}
+                      {bills.length > 0 && (
+                        <div className="divide-y divide-gray-200">
+                          {bills.map((bill) => (
+                            <Link
+                              key={bill.id}
+                              href={`/bills/${bill.id}`}
+                              className="block px-6 py-4 hover:bg-green-50 transition-colors"
+                            >
+                              <div className="flex items-start justify-between">
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-green-600">✓</span>
+                                    <h4 className="text-sm font-medium text-gray-900">
+                                      {bill.bill_type.toUpperCase()}. {bill.bill_number}
+                                      {extractShortTitle(bill.title) && (
+                                        <span className="font-normal text-gray-700"> - {extractShortTitle(bill.title)}</span>
+                                      )}
+                                    </h4>
+                                  </div>
+                                  <p className="mt-1 text-xs text-gray-600 line-clamp-1">
+                                    {bill.title || 'No title available'}
+                                  </p>
+                                  <div className="mt-1 flex items-center gap-3 text-xs text-gray-500">
+                                    {bill.latest_action_date && (
+                                      <span>Enacted: {formatDate(bill.latest_action_date)}</span>
+                                    )}
+                                  </div>
+                                  {renderVotePreview(bill.id)}
+                                </div>
+                                <div className="ml-3 flex-shrink-0">
+                                  <svg className="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                  </svg>
+                                </div>
+                              </div>
+                            </Link>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ));
+                  );
+                });
               })()
             )}
           </div>
