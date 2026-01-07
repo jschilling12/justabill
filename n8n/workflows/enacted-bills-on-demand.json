@@ -5,6 +5,7 @@
       "parameters": {
         "httpMethod": "POST",
         "path": "enacted-bills-fetch",
+        "authentication": "headerAuth",
         "responseMode": "responseNode",
         "options": {}
       },
@@ -12,7 +13,13 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1.1,
       "position": [250, 300],
-      "webhookId": "enacted-bills-on-demand"
+      "webhookId": "enacted-bills-on-demand",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "n8n-webhook-auth",
+          "name": "Webhook Auth"
+        }
+      }
     },
     {
       "parameters": {

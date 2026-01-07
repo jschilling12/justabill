@@ -416,8 +416,9 @@ async def fetch_enacted_by_president(
     
     congress_range = PRESIDENT_CONGRESS_MAP[lookup_name]
     
-    # Get n8n webhook URL from environment
+    # Get n8n webhook URL and auth from environment
     n8n_webhook_url = os.getenv("N8N_ENACTED_WEBHOOK_URL")
+    n8n_webhook_auth = os.getenv("N8N_WEBHOOK_AUTH_KEY", "")
     if not n8n_webhook_url:
         raise HTTPException(
             status_code=500,
@@ -425,6 +426,10 @@ async def fetch_enacted_by_president(
         )
     
     try:
+        headers = {}
+        if n8n_webhook_auth:
+            headers["Authorization"] = f"Bearer {n8n_webhook_auth}"
+        
         async with httpx.AsyncClient(timeout=300.0) as client:
             response = await client.post(
                 n8n_webhook_url,
@@ -432,7 +437,8 @@ async def fetch_enacted_by_president(
                     "president_name": lookup_name,
                     "start_congress": congress_range["start"],
                     "end_congress": congress_range["end"],
-                }
+                },
+                headers=headers
             )
             
             if response.status_code >= 400:
