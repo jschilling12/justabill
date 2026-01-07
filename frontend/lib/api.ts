@@ -397,6 +397,21 @@ export async function fetchEnactedByPresident(presidentName: string): Promise<Fe
   return response.data;
 }
 
+// Get popular enacted bills by president (top N per president)
+export interface PopularBillByPresident {
+  bill_id: string;
+  bill_type: string;
+  bill_number: number;
+  title: string;
+  vote_count: number;
+  latest_action_date: string | null;
+}
+
+export async function getPopularBillsByPresident(topN: number = 2): Promise<Record<string, PopularBillByPresident[]>> {
+  const response = await api.get(`/bills/popular-by-president?top_n=${topN}`);
+  return response.data;
+}
+
 // President to Congress mapping (client-side reference)
 export const PRESIDENT_CONGRESS_MAP: Record<string, { start: number; end: number; years: string }> = {
   "Donald Trump 2nd": { start: 119, end: 119, years: "2025-2029" },

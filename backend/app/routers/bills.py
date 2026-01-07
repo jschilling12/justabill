@@ -287,3 +287,66 @@ async def cleanup_old_bills(
         "cutoff_date": cutoff_date.isoformat(),
         "older_than_days": older_than_days
     }
+
+
+@router.get("/popular-by-president")
+async def get_popular_bills_by_president(
+    top_n: int = Query(2, ge=1, le=10, description="Number of top bills per president"),
+    db: Session = Depends(get_db)
+):
+    """Get the most voted-on enacted bills for each president (top N per president)"""
+    from sqlalchemy import func
+    from app.models import Vote
+    from datetime import datetime
+    
+    # President date ranges for grouping
+    PRESIDENT_RANGES = {
+        "Donald Trump 2nd": ("2025-01-20", "2029-01-20"),
+        "Joe Biden": ("2021-01-20", "2025-01-20"),
+        "Donald Trump": ("2017-01-20", "2021-01-20"),
+        "Barack Obama": ("2009-01-20", "2017-01-20"),
+        "George W. Bush": ("2001-01-20", "2009-01-20"),
+        "Bill Clinton": ("1993-01-20", "2001-01-20"),
+        "George H.W. Bush": ("1989-01-20", "1993-01-20"),
+        "Ronald Reagan": ("1981-01-20", "1989-01-20"),
+        "Jimmy Carter": ("1977-01-20", "1981-01-20"),
+        "Gerald Ford": ("1974-08-09", "1977-01-20"),
+        "Richard Nixon": ("1969-01-20", "1974-08-09"),
+    }
+    
+    result = {}
+    
+    for president, (start_str, end_str) in PRESIDENT_RANGES.items():
+        start_date = datetime.fromisoformat(start_str.replace('Z', '+00:00'))
+        end_date = datetime.fromisoformat(end_str.replace('Z', '+00:00'))
+        
+        # Get enacted bills in this president's term with vote counts
+        bills_with_votes = (
+            db.query(
+                Bill,
+                func.count(Vote.id).label('vote_count')
+            )
+            .outerjoin(Vote, Bill.id == Vote.bill_id)
+            .filter(Bill.status == BillStatus.ENACTED)
+            .filter(Bill.latest_action_date >= start_date.date())
+            .filter(Bill.latest_action_date < end_date.date())
+            .group_by(Bill.id)
+            .order_by(func.count(Vote.id).desc())
+            .limit(top_n)
+            .all()
+        )
+        
+        if bills_with_votes:
+            result[president] = [
+                {
+                    "bill_id": str(bill.id),
+                    "bill_type": bill.bill_type,
+                    "bill_number": bill.bill_number,
+                    "title": bill.title,
+                    "vote_count": vote_count,
+                    "latest_action_date": bill.latest_action_date.isoformat() if bill.latest_action_date else None,
+                }
+                for bill, vote_count in bills_with_votes
+            ]
+    
+    return result

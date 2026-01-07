@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { getBills, getBillsVoteStats, Bill, VoteStats, BillStatus, BILL_STATUS_LABELS, ACTIVE_STATUSES, getPresidentForDate, PRESIDENTS, President, fetchEnactedByPresident, PRESIDENT_CONGRESS_MAP } from '../lib/api';
+import { getBills, getBillsVoteStats, Bill, VoteStats, BillStatus, BILL_STATUS_LABELS, ACTIVE_STATUSES, getPresidentForDate, PRESIDENTS, President, fetchEnactedByPresident, PRESIDENT_CONGRESS_MAP, getPopularBillsByPresident, PopularBillByPresident } from '../lib/api';
 
 export default function Home() {
   const router = useRouter();
@@ -26,6 +26,7 @@ export default function Home() {
   const [lastFetchTime, setLastFetchTime] = useState<Record<string, number>>({});
   const [refreshCooldown, setRefreshCooldown] = useState<Record<string, number>>({});
   const [collapsedPresidents, setCollapsedPresidents] = useState<Set<string>>(new Set());
+  const [popularByPresident, setPopularByPresident] = useState<Record<string, PopularBillByPresident[]>>({});
 
   // Load persisted state from localStorage on mount
   useEffect(() => {
@@ -51,6 +52,10 @@ export default function Home() {
         const parsed = JSON.parse(storedFetchedPresidents);
         setFetchedPresidents(new Set(parsed));
       }
+
+      // Initialize all presidents as collapsed
+      const allPresidentNames = Object.keys(PRESIDENT_CONGRESS_MAP);
+      setCollapsedPresidents(new Set(allPresidentNames));
     } catch (e) {
       console.error('Error loading persisted state:', e);
     }
@@ -181,6 +186,14 @@ export default function Home() {
       setEnactedBills(data.items);
       const stats = await getBillsVoteStats(data.items.map((b: Bill) => b.id));
       setStatsByBill((prev) => ({ ...prev, ...stats }));
+      
+      // Fetch popular bills by president
+      try {
+        const popular = await getPopularBillsByPresident(2);
+        setPopularByPresident(popular);
+      } catch (err) {
+        console.error('Error loading popular bills by president:', err);
+      }
     } catch (error) {
       console.error('Error loading enacted bills:', error);
     } finally {
@@ -801,7 +814,11 @@ export default function Home() {
                       {/* Bills under this president */}
                       {hasBills && !isCollapsed && (
                         <div className="divide-y divide-gray-200">
-                          {bills.map((bill) => (
+                          {bills.map((bill) => {
+                            // Check if this bill is in the top 2 popular for this president
+                            const popularBills = popularByPresident[presName] || [];
+                            const isPopular = popularBills.some(pb => pb.bill_id === bill.id);
+                            return (
                             <Link
                               key={bill.id}
                               href={`/bills/${bill.id}?from=enacted&president=${encodeURIComponent(presName)}`}
@@ -811,6 +828,7 @@ export default function Home() {
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-2">
                                     <span className="text-green-600">✓</span>
+                                    {isPopular && <span className="text-lg" title="Popular bill">🔥</span>}
                                     <h4 className="text-sm font-medium text-gray-900">
                                       {bill.bill_type.toUpperCase()}. {bill.bill_number}
                                       {extractShortTitle(bill.title) && (
@@ -835,7 +853,7 @@ export default function Home() {
                                 </div>
                               </div>
                             </Link>
-                          ))}
+                          );})}
                         </div>
                       )}
                     </div>
