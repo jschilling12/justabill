@@ -161,6 +161,122 @@
         1850,
         300
       ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://98.94.94.17/api/bills",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "page",
+              "value": "1"
+            },
+            {
+              "name": "page_size",
+              "value": "100"
+            },
+            {
+              "name": "status",
+              "value": "enacted"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Fetch Enacted for Popularity",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        2050,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get president name and filter bills\nconst presidentName = $('Generate Congress List').first().json.president_name;\nconst allBills = $input.first().json.items || [];\n\n// President date ranges\nconst PRESIDENT_RANGES = {\n  \"Donald Trump 2nd\": { start: \"2025-01-20\", end: \"2029-01-20\" },\n  \"Joe Biden\": { start: \"2021-01-20\", end: \"2025-01-20\" },\n  \"Donald Trump\": { start: \"2017-01-20\", end: \"2021-01-20\" },\n  \"Barack Obama\": { start: \"2009-01-20\", end: \"2017-01-20\" },\n  \"George W. Bush\": { start: \"2001-01-20\", end: \"2009-01-20\" },\n  \"Bill Clinton\": { start: \"1993-01-20\", end: \"2001-01-20\" },\n  \"George H.W. Bush\": { start: \"1989-01-20\", end: \"1993-01-20\" },\n};\n\nconst range = PRESIDENT_RANGES[presidentName];\nif (!range) {\n  return [];\n}\n\nconst startDate = new Date(range.start);\nconst endDate = new Date(range.end);\n\n// Filter bills by date range\nconst filteredBills = allBills.filter(bill => {\n  if (!bill.latest_action_date) return false;\n  const actionDate = new Date(bill.latest_action_date);\n  return actionDate >= startDate && actionDate < endDate;\n});\n\n// Limit to top 10 to avoid too many API calls\nreturn filteredBills.slice(0, 10).map(bill => ({\n  json: {\n    bill_id: bill.id,\n    bill_type: bill.bill_type,\n    bill_number: bill.bill_number,\n    congress: bill.congress,\n    title: bill.title,\n    president_name: presidentName\n  }\n}));"
+      },
+      "name": "Filter for Popularity Scan",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2250,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://www.googleapis.com/customsearch/v1",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "key",
+              "value": "={{$env.GOOGLE_API_KEY}}"
+            },
+            {
+              "name": "cx",
+              "value": "={{$env.GOOGLE_SEARCH_ENGINE_ID}}"
+            },
+            {
+              "name": "q",
+              "value": "={{$json.bill_type.toUpperCase()}} {{$json.bill_number}} {{$json.congress}}th Congress"
+            },
+            {
+              "name": "dateRestrict",
+              "value": "m3"
+            },
+            {
+              "name": "sort",
+              "value": "date"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Search Web for Bill",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        2450,
+        300
+      ],
+      "continueOnFail": true,
+      "id": "search-web-popularity",
+      "notes": "Replace with your preferred search API (Google Custom Search, Bing, NewsAPI, etc.)\nThis example uses Google Custom Search API."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Determine if bill is popular based on search results\n// The search result and bill data are both available in different ways\n// We'll extract bill data from the search query that was made\n\nconst items = $input.all();\nconst results = [];\n\nfor (let i = 0; i < items.length; i++) {\n  const searchResult = items[i].json;\n  \n  // Get bill data from the input item's binary/pairedItem reference\n  // In n8n, when Split in Batches passes data through Search Web for Bill,\n  // the original bill data is lost. We need to extract it from the query string.\n  \n  // The search query was: \"HR 3616 119th Congress\"\n  // We can get it from the request URL or reconstruct from search results\n  const searchQuery = searchResult?.queries?.request?.[0]?.searchTerms || '';\n  const queryParts = searchQuery.match(/^([A-Z]+)\\s+(\\d+)\\s+(\\d+)th/);\n  \n  if (!queryParts) {\n    console.log('Could not parse query:', searchQuery);\n    continue;\n  }\n  \n  const billType = queryParts[1].toLowerCase();\n  const billNumber = parseInt(queryParts[2], 10);\n  const congress = parseInt(queryParts[3], 10);\n  \n  // Calculate popularity score based on quality signals, not just raw count\n  let popularityScore = 0;\n  let isPopular = false;\n  \n  if (searchResult && !searchResult.error && searchResult.items) {\n    const items = searchResult.items || [];\n    \n    // Score each result based on recency and source quality\n    for (const item of items) {\n      let score = 1; // Base score per result\n      \n      // Boost for high-quality domains (news sources, government, etc.)\n      const domain = item.displayLink || '';\n      if (domain.includes('news') || domain.includes('cnn') || domain.includes('fox') || \n          domain.includes('nbc') || domain.includes('abc') || domain.includes('reuters') ||\n          domain.includes('ap.org') || domain.includes('politico') || domain.includes('thehill')) {\n        score += 5; // Major news = +5\n      } else if (domain.includes('.gov') || domain.includes('congress.gov')) {\n        score += 3; // Government source = +3\n      } else if (domain.includes('blog') || domain.includes('wordpress') || domain.includes('medium')) {\n        score -= 0.5; // Blogs/opinion = -0.5\n      }\n      \n      // Boost if bill number is in the title (more relevant)\n      const title = (item.title || '').toLowerCase();\n      if (title.includes(billType) && title.includes(billNumber.toString())) {\n        score += 2;\n      }\n      \n      popularityScore += score;\n    }\n    \n    // Round to nearest integer\n    popularityScore = Math.round(popularityScore);\n    \n    // Mark as popular if score >= 10 (roughly 2-3 quality news mentions)\n    isPopular = popularityScore >= 10;\n  }\n  \n  // Get title from search results\n  const title = searchResult?.items?.[0]?.title || `${billType.toUpperCase()} ${billNumber}`;\n  \n  results.push({\n    json: {\n      bill_type: billType,\n      bill_number: billNumber,\n      congress: congress,\n      title: title,\n      popularity_score: popularityScore,\n      is_popular: isPopular\n    }\n  });\n}\n\nreturn results;"
+      },
+      "name": "Calculate Popularity",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2650,
+        300
+      ],
+      "id": "calculate-popularity"
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=http://98.94.94.17/api/bills/lookup/{{$json.congress}}/{{$json.bill_type}}/{{$json.bill_number}}/popularity",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"is_popular\": {{$json.is_popular}},\n  \"popularity_score\": {{$json.popularity_score}}\n}",
+        "options": {}
+      },
+      "name": "Update Bill Popularity",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        2850,
+        300
+      ],
+      "continueOnFail": true,
+      "id": "update-popularity"
     }
   ],
   "connections": {
@@ -238,7 +354,15 @@
       ]
     },
     "Summarize Results": {
-      "main": []
+      "main": [
+        [
+          {
+            "node": "Fetch Enacted for Popularity",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Google Search": {
       "main": [
@@ -278,6 +402,61 @@
         [
           {
             "node": "Generate Congress List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Enacted for Popularity": {
+      "main": [
+        [
+          {
+            "node": "Filter for Popularity Scan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter for Popularity Scan": {
+      "main": [
+        [
+          {
+            "node": "Search Web for Bill",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Web for Bill": {
+      "main": [
+        [
+          {
+            "node": "Calculate Popularity",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Popularity": {
+      "main": [
+        [
+          {
+            "node": "Update Bill Popularity",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Bill Popularity": {
+      "main": [
+        [
+          {
+            "node": "Split Presidents",
             "type": "main",
             "index": 0
           }

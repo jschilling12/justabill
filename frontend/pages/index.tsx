@@ -171,35 +171,13 @@ export default function Home() {
       const stats = await getBillsVoteStats(data.items.map((b: Bill) => b.id));
       setStatsByBill((prev) => ({ ...prev, ...stats }));
       
-      // Calculate top 2 popular bills per president based on vote count
-      const popularByPres: Record<string, PopularBillByPresident[]> = {};
-      data.items.forEach(bill => {
-        const president = getPresidentForDate(bill.latest_action_date);
-        if (!president) return;
-        
-        const presName = president.name;
-        if (!popularByPres[presName]) popularByPres[presName] = [];
-        
-        const voteCount = (stats[bill.id]?.upvotes || 0) + (stats[bill.id]?.downvotes || 0);
-        popularByPres[presName].push({
-          bill_id: bill.id,
-          bill_type: bill.bill_type,
-          bill_number: bill.bill_number,
-          congress: bill.congress,
-          title: bill.title,
-          popularity_score: voteCount,
-          president_name: presName
-        });
-      });
-      
-      // Sort and take top 2 per president
-      Object.keys(popularByPres).forEach(presName => {
-        popularByPres[presName] = popularByPres[presName]
-          .sort((a, b) => b.popularity_score - a.popularity_score)
-          .slice(0, 2);
-      });
-      
-      setPopularByPresident(popularByPres);
+      // Fetch popular bills by president
+      try {
+        const popular = await getPopularBillsByPresident(2);
+        setPopularByPresident(popular);
+      } catch (err) {
+        console.error('Error loading popular bills by president:', err);
+      }
     } catch (error) {
       console.error('Error loading enacted bills:', error);
     } finally {
