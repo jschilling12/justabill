@@ -1,31 +1,36 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { getBills, getBillsVoteStats, Bill, VoteStats } from '../lib/api';
+import { getBills, getBillsVoteStats, Bill, VoteStats, BillStatus, BILL_STATUS_LABELS, ACTIVE_STATUSES } from '../lib/api';
 
 export default function Home() {
   const [bills, setBills] = useState<Bill[]>([]);
   const [lawImpactBills, setLawImpactBills] = useState<Bill[]>([]);
   const [popularBills, setPopularBills] = useState<Bill[]>([]);
+  const [enactedBills, setEnactedBills] = useState<Bill[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingLawImpact, setLoadingLawImpact] = useState(true);
   const [loadingPopular, setLoadingPopular] = useState(true);
+  const [loadingEnacted, setLoadingEnacted] = useState(true);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [statsByBill, setStatsByBill] = useState<Record<string, VoteStats>>({});
+  const [statusFilter, setStatusFilter] = useState<BillStatus | ''>('');
+  const [activeTab, setActiveTab] = useState<'voting' | 'enacted'>('voting');
 
   useEffect(() => {
     loadBills();
-  }, [page]);
+  }, [page, statusFilter]);
 
   useEffect(() => {
     loadLawImpactBills();
     loadPopularBills();
+    loadEnactedBills();
   }, []);
 
   const loadBills = async () => {
     try {
       setLoading(true);
-      const data = await getBills(page, 20);
+      const data = await getBills(page, 20, undefined, undefined, statusFilter || undefined);
       setBills(data.items);
       setTotalPages(data.pages);
       const stats = await getBillsVoteStats(data.items.map((b: Bill) => b.id));
@@ -55,15 +60,32 @@ export default function Home() {
   const loadPopularBills = async () => {
     try {
       setLoadingPopular(true);
-      // Fetch top 5 popular bills
+      // Fetch top 5 popular bills (exclude enacted since those aren't for voting)
       const data = await getBills(1, 5, true);
-      setPopularBills(data.items);
-      const stats = await getBillsVoteStats(data.items.map((b: Bill) => b.id));
+      // Filter out enacted bills from popular
+      const activeBills = data.items.filter((b: Bill) => b.status !== 'enacted');
+      setPopularBills(activeBills);
+      const stats = await getBillsVoteStats(activeBills.map((b: Bill) => b.id));
       setStatsByBill((prev) => ({ ...prev, ...stats }));
     } catch (error) {
       console.error('Error loading popular bills:', error);
     } finally {
       setLoadingPopular(false);
+    }
+  };
+
+  const loadEnactedBills = async () => {
+    try {
+      setLoadingEnacted(true);
+      // Fetch bills that have been signed into law
+      const data = await getBills(1, 10, undefined, undefined, 'enacted');
+      setEnactedBills(data.items);
+      const stats = await getBillsVoteStats(data.items.map((b: Bill) => b.id));
+      setStatsByBill((prev) => ({ ...prev, ...stats }));
+    } catch (error) {
+      console.error('Error loading enacted bills:', error);
+    } finally {
+      setLoadingEnacted(false);
     }
   };
 
@@ -146,6 +168,37 @@ export default function Home() {
             reflects your votes; it does not provide legal, financial, or political advice.
           </p>
         </div>
+
+        {/* Main Tabs */}
+        <div className="mb-6">
+          <div className="border-b border-gray-200">
+            <nav className="-mb-px flex space-x-8">
+              <button
+                onClick={() => setActiveTab('voting')}
+                className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === 'voting'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                🗳️ Bills for Voting
+              </button>
+              <button
+                onClick={() => setActiveTab('enacted')}
+                className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === 'enacted'
+                    ? 'border-green-500 text-green-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                ✅ Signed into Law
+              </button>
+            </nav>
+          </div>
+        </div>
+
+        {activeTab === 'voting' ? (
+          <>
 
         {/* Popular Bills */}
         <div className="mb-8">
@@ -290,8 +343,27 @@ export default function Home() {
 
         {/* Bills List */}
         <div className="bg-white rounded-lg shadow">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <h2 className="text-xl font-semibold text-gray-900">Bills</h2>
+          <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+            <h2 className="text-xl font-semibold text-gray-900">All Bills</h2>
+            <div className="flex items-center gap-2">
+              <label htmlFor="status-filter" className="text-sm text-gray-600">Filter by status:</label>
+              <select
+                id="status-filter"
+                value={statusFilter}
+                onChange={(e) => {
+                  setStatusFilter(e.target.value as BillStatus | '');
+                  setPage(1);
+                }}
+                className="text-sm border border-gray-300 rounded-md px-3 py-1.5 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="">All Statuses</option>
+                {ACTIVE_STATUSES.map((status) => (
+                  <option key={status} value={status}>
+                    {BILL_STATUS_LABELS[status]}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
           {loading ? (
@@ -374,6 +446,78 @@ export default function Home() {
             </div>
           )}
         </div>
+        </>
+        ) : (
+          /* Enacted Bills Tab */
+          <div className="bg-white rounded-lg shadow">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h2 className="text-xl font-semibold text-gray-900">✅ Signed into Law</h2>
+              <p className="text-sm text-gray-500 mt-1">
+                These bills have been enacted and are now law. View how the community voted on them.
+              </p>
+            </div>
+            {loadingEnacted ? (
+              <div className="px-6 py-12 text-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-green-600 mx-auto"></div>
+                <p className="mt-2 text-gray-600">Loading enacted bills...</p>
+              </div>
+            ) : enactedBills.length === 0 ? (
+              <div className="px-6 py-12 text-center text-gray-500">
+                <p className="text-lg">📜 No enacted bills yet</p>
+                <p className="mt-2 text-sm">Bills that get signed into law will appear here.</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-200">
+                {enactedBills.map((bill) => (
+                  <Link
+                    key={bill.id}
+                    href={`/bills/${bill.id}`}
+                    className="block px-6 py-4 hover:bg-green-50 transition-colors"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-green-600 text-lg">✓</span>
+                          <h3 className="text-lg font-medium text-gray-900">
+                            {bill.bill_type.toUpperCase()}. {bill.bill_number}
+                            {extractShortTitle(bill.title) && (
+                              <span className="font-normal text-gray-700"> - {extractShortTitle(bill.title)}</span>
+                            )}
+                          </h3>
+                        </div>
+                        <p className="mt-1 text-sm text-gray-600 line-clamp-2">
+                          {bill.title || 'No title available'}
+                        </p>
+                        <div className="mt-2 flex items-center space-x-4 text-xs text-gray-500">
+                          <span className="px-2 py-0.5 bg-green-100 text-green-800 rounded">Signed into Law</span>
+                          {bill.latest_action_date && (
+                            <span>Enacted: {formatDate(bill.latest_action_date)}</span>
+                          )}
+                        </div>
+                        {renderVotePreview(bill.id)}
+                      </div>
+                      <div className="ml-4 flex-shrink-0">
+                        <svg
+                          className="h-5 w-5 text-gray-400"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M9 5l7 7-7 7"
+                          />
+                        </svg>
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </main>
     </div>
   );

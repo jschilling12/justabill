@@ -175,16 +175,50 @@ export interface MyBillsVotesResponse {
   items: MyBillVoteItem[];
 }
 
+// Bill status enum
+export type BillStatus = 
+  | 'introduced'
+  | 'in_committee'
+  | 'passed_house'
+  | 'passed_senate'
+  | 'in_conference'
+  | 'passed_both'
+  | 'vetoed'
+  | 'enacted';
+
+export const BILL_STATUS_LABELS: Record<BillStatus, string> = {
+  introduced: 'Introduced',
+  in_committee: 'In Committee',
+  passed_house: 'Passed House',
+  passed_senate: 'Passed Senate',
+  in_conference: 'In Conference',
+  passed_both: 'Passed Both Chambers',
+  vetoed: 'Vetoed',
+  enacted: 'Signed into Law',
+};
+
+// Statuses that are "in progress" (for voting)
+export const ACTIVE_STATUSES: BillStatus[] = [
+  'introduced',
+  'in_committee',
+  'passed_house',
+  'passed_senate',
+  'in_conference',
+  'passed_both',
+];
+
 // API functions
 export async function getBills(
   page: number = 1,
   pageSize: number = 20,
   popular?: boolean,
-  lawImpactOnly?: boolean
+  lawImpactOnly?: boolean,
+  status?: BillStatus
 ) {
   const params: Record<string, any> = { page, page_size: pageSize };
   if (popular) params.popular = true;
   if (lawImpactOnly) params.law_impact_only = true;
+  if (status) params.status = status;
 
   const response = await api.get('/bills', { params });
   return response.data;
