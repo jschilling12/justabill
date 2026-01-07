@@ -23,30 +23,13 @@ export default function Home() {
   const [fetchingPresident, setFetchingPresident] = useState<string | null>(null);
   const [fetchedPresidents, setFetchedPresidents] = useState<Set<string>>(new Set());
   const [fetchError, setFetchError] = useState<string | null>(null);
-  const [lastFetchTime, setLastFetchTime] = useState<Record<string, number>>({});
-  const [refreshCooldown, setRefreshCooldown] = useState<Record<string, number>>({});
   const [collapsedPresidents, setCollapsedPresidents] = useState<Set<string>>(new Set());
   const [popularByPresident, setPopularByPresident] = useState<Record<string, PopularBillByPresident[]>>({});
 
   // Load persisted state from localStorage on mount
   useEffect(() => {
     try {
-      const storedFetchTimes = localStorage.getItem('justabill_lastFetchTime');
       const storedFetchedPresidents = localStorage.getItem('justabill_fetchedPresidents');
-      
-      if (storedFetchTimes) {
-        const parsed = JSON.parse(storedFetchTimes);
-        setLastFetchTime(parsed);
-        // Also set refreshCooldown for any that are still within 5 min window
-        const now = Date.now();
-        const activeCooldowns: Record<string, number> = {};
-        for (const [key, time] of Object.entries(parsed)) {
-          if (now - (time as number) < 300000) { // 5 minutes in ms
-            activeCooldowns[key] = time as number;
-          }
-        }
-        setRefreshCooldown(activeCooldowns);
-      }
       
       if (storedFetchedPresidents) {
         const parsed = JSON.parse(storedFetchedPresidents);
@@ -91,35 +74,12 @@ export default function Home() {
     );
   };
 
-  // Persist lastFetchTime to localStorage
-  useEffect(() => {
-    if (Object.keys(lastFetchTime).length > 0) {
-      localStorage.setItem('justabill_lastFetchTime', JSON.stringify(lastFetchTime));
-    }
-  }, [lastFetchTime]);
-
   // Persist fetchedPresidents to localStorage
   useEffect(() => {
     if (fetchedPresidents.size > 0) {
       localStorage.setItem('justabill_fetchedPresidents', JSON.stringify(Array.from(fetchedPresidents)));
     }
   }, [fetchedPresidents]);
-
-  // Cooldown timer effect
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const now = Date.now();
-      setRefreshCooldown(prev => {
-        const updated: Record<string, number> = {};
-        for (const [key, time] of Object.entries(prev)) {
-          const remaining = Math.max(0, 300 - Math.floor((now - time) / 1000));
-          if (remaining > 0) updated[key] = time;
-        }
-        return updated;
-      });
-    }, 1000);
-    return () => clearInterval(interval);
-  }, []);
 
   useEffect(() => {
     loadBills();
@@ -226,30 +186,12 @@ export default function Home() {
   };
 
   // Handle clicking on a president to fetch their enacted bills
-  const handleFetchPresidentBills = async (presidentName: string, isRefresh: boolean = false) => {
+  const handleFetchPresidentBills = async (presidentName: string) => {
     // Map display name to API name
     let apiName = presidentName;
     
-    // Special handling for Trump's two terms
-    if (presidentName === 'Donald Trump') {
-      // Check if we're looking at 2025+ (2nd term) or 2017-2021 (1st term)
-      // We'll need to determine this from context. For now, use the exact match logic
-      const hasTrump2nd = Object.keys(PRESIDENT_CONGRESS_MAP).includes('Donald Trump 2nd');
-      // If the president header shows 2025-2029, it's 2nd term
-      // This will be handled by the onClick context
-    }
-    
-    // Check cooldown for refresh
-    const now = Date.now();
-    const lastFetch = lastFetchTime[apiName] || 0;
-    const cooldownRemaining = Math.max(0, 300 - Math.floor((now - lastFetch) / 1000));
-    
-    if (isRefresh && cooldownRemaining > 0) {
-      return; // Still on cooldown
-    }
-    
     if (fetchingPresident) return;
-    if (!isRefresh && fetchedPresidents.has(apiName)) return;
+    if (fetchedPresidents.has(apiName)) return;
     
     setFetchingPresident(apiName);
     setFetchError(null);
@@ -258,14 +200,12 @@ export default function Home() {
       const result = await fetchEnactedByPresident(apiName);
       console.log('Fetch result:', result);
       
-      // Mark as fetched and record time
+      // Mark as fetched
       setFetchedPresidents(prev => {
         const newSet = new Set(Array.from(prev));
         newSet.add(apiName);
         return newSet;
       });
-      setLastFetchTime(prev => ({ ...prev, [apiName]: Date.now() }));
-      setRefreshCooldown(prev => ({ ...prev, [apiName]: Date.now() }));
       
       // Reload enacted bills multiple times as n8n ingests them
       // First reload after 3s, then 10s, then 30s to catch stragglers
@@ -281,20 +221,6 @@ export default function Home() {
     }
   };
   
-  // Get cooldown remaining for a president
-  const getCooldownRemaining = (presName: string): number => {
-    const lastFetch = refreshCooldown[presName];
-    if (!lastFetch) return 0;
-    return Math.max(0, 300 - Math.floor((Date.now() - lastFetch) / 1000));
-  };
-  
-  // Format cooldown time
-  const formatCooldown = (seconds: number): string => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
-
   // Toggle collapse state for a president
   const togglePresidentCollapse = (presName: string) => {
     setCollapsedPresidents(prev => {
@@ -734,7 +660,6 @@ export default function Home() {
                   const displayName = presName.replace(' 2nd', '');
                   const isSecondTerm = presName.includes('2nd');
                   const isCurrentTerm = presName === 'Donald Trump 2nd'; // 119th Congress, just started
-                  const cooldown = getCooldownRemaining(presName);
                   const presidentId = `president-${presName.replace(/\s+/g, '-')}`;
                   const isCollapsed = collapsedPresidents.has(presName);
                   const hasBills = bills.length > 0;
@@ -825,39 +750,6 @@ export default function Home() {
                               </p>
                             </>
                           )}
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleFetchPresidentBills(presName, true);
-                            }}
-                            disabled={cooldown > 0 || isFetching}
-                            className={`mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                              cooldown > 0 
-                                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                                : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
-                            }`}
-                          >
-                            {isFetching ? (
-                              <>
-                                <div className="animate-spin h-3 w-3 border-2 border-blue-400 border-t-transparent rounded-full"></div>
-                                Refreshing...
-                              </>
-                            ) : cooldown > 0 ? (
-                              <>
-                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                                Refresh in {formatCooldown(cooldown)}
-                              </>
-                            ) : (
-                              <>
-                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                </svg>
-                                Refresh
-                              </>
-                            )}
-                          </button>
                         </div>
                       )}
                       
