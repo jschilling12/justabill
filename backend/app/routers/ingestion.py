@@ -14,6 +14,25 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+# Map bill_type codes to Congress.gov URL format
+BILL_TYPE_URL_MAP = {
+    'hr': 'house-bill',
+    's': 'senate-bill',
+    'hjres': 'house-joint-resolution',
+    'sjres': 'senate-joint-resolution',
+    'hconres': 'house-concurrent-resolution',
+    'sconres': 'senate-concurrent-resolution',
+    'hres': 'house-resolution',
+    'sres': 'senate-resolution',
+}
+
+
+def _get_congress_gov_url(congress: int, bill_type: str, bill_number: int) -> str:
+    """Generate correct Congress.gov URL for a bill"""
+    url_bill_type = BILL_TYPE_URL_MAP.get(bill_type.lower(), f"{bill_type.lower()}-bill")
+    return f"https://www.congress.gov/bill/{congress}th-congress/{url_bill_type}/{bill_number}"
+
+
 def _map_status(latest_action: dict) -> str:
     """Map Congress.gov latest action to our BillStatus enum"""
     action_text = (latest_action.get('text') or '').lower()
@@ -126,7 +145,7 @@ async def ingest_bill(
                 status=status,
                 sponsor=bill_data.get('sponsors', [{}])[0] if bill_data.get('sponsors') else None,
                 source_urls={
-                    'congress_gov': f"https://www.congress.gov/bill/{request.congress}th-congress/{request.bill_type}-bill/{request.bill_number}"
+                    'congress_gov': _get_congress_gov_url(request.congress, request.bill_type, request.bill_number)
                 },
                 raw_metadata=bill_data,
                 is_law_impact_candidate=is_law_impact_candidate,
