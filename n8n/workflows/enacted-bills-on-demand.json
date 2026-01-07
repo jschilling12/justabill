@@ -210,7 +210,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Get president name and filter bills\nconst presidentName = $('Extract Parameters').first().json.president_name;\nconst allBills = $input.first().json.items || [];\n\n// President date ranges\nconst PRESIDENT_RANGES = {\n  \"Donald Trump 2nd\": { start: \"2025-01-20\", end: \"2029-01-20\" },\n  \"Joe Biden\": { start: \"2021-01-20\", end: \"2025-01-20\" },\n  \"Donald Trump\": { start: \"2017-01-20\", end: \"2021-01-20\" },\n  \"Barack Obama\": { start: \"2009-01-20\", end: \"2017-01-20\" },\n  \"George W. Bush\": { start: \"2001-01-20\", end: \"2009-01-20\" },\n  \"Bill Clinton\": { start: \"1993-01-20\", end: \"2001-01-20\" },\n  \"George H.W. Bush\": { start: \"1989-01-20\", end: \"1993-01-20\" },\n};\n\nconst range = PRESIDENT_RANGES[presidentName];\nif (!range) {\n  return [];\n}\n\nconst startDate = new Date(range.start);\nconst endDate = new Date(range.end);\n\n// Filter bills by date range\nconst filteredBills = allBills.filter(bill => {\n  if (!bill.latest_action_date) return false;\n  const actionDate = new Date(bill.latest_action_date);\n  return actionDate >= startDate && actionDate < endDate;\n});\n\n// Limit to top 10 to avoid too many API calls\nreturn filteredBills.slice(0, 10).map(bill => ({\n  bill_id: bill.id,\n  bill_type: bill.bill_type,\n  bill_number: bill.bill_number,\n  title: bill.title,\n  search_query: `${bill.bill_type.toUpperCase()} ${bill.bill_number} law signed`,\n  president_name: presidentName\n}));"
+        "jsCode": "// Get president name and filter bills\nconst presidentName = $('Extract Parameters').first().json.president_name;\nconst allBills = $input.first().json.items || [];\n\n// President date ranges\nconst PRESIDENT_RANGES = {\n  \"Donald Trump 2nd\": { start: \"2025-01-20\", end: \"2029-01-20\" },\n  \"Joe Biden\": { start: \"2021-01-20\", end: \"2025-01-20\" },\n  \"Donald Trump\": { start: \"2017-01-20\", end: \"2021-01-20\" },\n  \"Barack Obama\": { start: \"2009-01-20\", end: \"2017-01-20\" },\n  \"George W. Bush\": { start: \"2001-01-20\", end: \"2009-01-20\" },\n  \"Bill Clinton\": { start: \"1993-01-20\", end: \"2001-01-20\" },\n  \"George H.W. Bush\": { start: \"1989-01-20\", end: \"1993-01-20\" },\n};\n\nconst range = PRESIDENT_RANGES[presidentName];\nif (!range) {\n  return [];\n}\n\nconst startDate = new Date(range.start);\nconst endDate = new Date(range.end);\n\n// Filter bills by date range\nconst filteredBills = allBills.filter(bill => {\n  if (!bill.latest_action_date) return false;\n  const actionDate = new Date(bill.latest_action_date);\n  return actionDate >= startDate && actionDate < endDate;\n});\n\n// Limit to top 10 to avoid too many API calls\nreturn filteredBills.slice(0, 5).map(bill => ({\n  bill_id: bill.id,\n  bill_type: bill.bill_type,\n  bill_number: bill.bill_number,\n  title: bill.title,\n  search_query: `${bill.bill_type.toUpperCase()} ${bill.bill_number} law signed`,\n  president_name: presidentName\n}));"
       },
       "name": "Filter for Popularity Scan",
       "type": "n8n-nodes-base.code",
@@ -226,7 +226,13 @@
         "operation": "search",
         "query": "={{ $json.search_query }}",
         "options": {
-          "num": 10
+          "num": 10,
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 2000
+            }
+          }
         }
       },
       "name": "Google Search",
@@ -257,7 +263,7 @@
     },
     {
       "parameters": {
-        "amount": 2,
+        "amount": 3,
         "unit": "seconds"
       },
       "name": "Rate Limit (Google)",
