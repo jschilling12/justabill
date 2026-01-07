@@ -111,14 +111,7 @@
             }
           ]
         },
-        "options": {
-          "batching": {
-            "batch": {
-              "batchSize": 1,
-              "batchInterval": 3000
-            }
-          }
-        }
+        "options": {}
       },
       "name": "Search Web for Bill",
       "type": "n8n-nodes-base.httpRequest",
