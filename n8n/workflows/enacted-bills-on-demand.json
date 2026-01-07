@@ -57,29 +57,17 @@
     {
       "parameters": {
         "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict"
-          },
-          "conditions": [
+          "string": [
             {
-              "id": "has-bill",
-              "leftValue": "={{ $json.bill_number }}",
-              "rightValue": "",
-              "operator": {
-                "type": "exists",
-                "operation": "exists"
-              }
+              "value1": "={{ $json.bill_number }}",
+              "operation": "isNotEmpty"
             }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
+          ]
+        }
       },
       "name": "Has Bill Data",
       "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
+      "typeVersion": 1,
       "position": [1250, 300],
       "id": "has-bill"
     },
