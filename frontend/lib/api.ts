@@ -397,13 +397,13 @@ export async function fetchEnactedByPresident(presidentName: string): Promise<Fe
   return response.data;
 }
 
-// Get popular enacted bills by president (top N per president)
+// Get popular enacted bills by president (top N per president based on external web search data)
 export interface PopularBillByPresident {
   bill_id: string;
   bill_type: string;
   bill_number: number;
   title: string;
-  vote_count: number;
+  popularity_score: number;
   latest_action_date: string | null;
 }
 

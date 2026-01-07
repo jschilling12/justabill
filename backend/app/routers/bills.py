@@ -294,9 +294,7 @@ async def get_popular_bills_by_president(
     top_n: int = Query(2, ge=1, le=10, description="Number of top bills per president"),
     db: Session = Depends(get_db)
 ):
-    """Get the most voted-on enacted bills for each president (top N per president)"""
-    from sqlalchemy import func
-    from app.models import Vote
+    """Get the most popular enacted bills for each president based on external popularity scores"""
     from datetime import datetime
     
     # President date ranges for grouping
@@ -320,33 +318,69 @@ async def get_popular_bills_by_president(
         start_date = datetime.fromisoformat(start_str.replace('Z', '+00:00'))
         end_date = datetime.fromisoformat(end_str.replace('Z', '+00:00'))
         
-        # Get enacted bills in this president's term with vote counts
-        bills_with_votes = (
-            db.query(
-                Bill,
-                func.count(Vote.id).label('vote_count')
-            )
-            .outerjoin(Vote, Bill.id == Vote.bill_id)
+        # Get enacted bills in this president's term, ordered by popularity_score
+        popular_bills = (
+            db.query(Bill)
             .filter(Bill.status == BillStatus.ENACTED)
             .filter(Bill.latest_action_date >= start_date.date())
             .filter(Bill.latest_action_date < end_date.date())
-            .group_by(Bill.id)
-            .order_by(func.count(Vote.id).desc())
+            .filter(Bill.popularity_score > 0)  # Only include bills with external popularity data
+            .order_by(desc(Bill.popularity_score))
             .limit(top_n)
             .all()
         )
         
-        if bills_with_votes:
+        if popular_bills:
             result[president] = [
                 {
                     "bill_id": str(bill.id),
                     "bill_type": bill.bill_type,
                     "bill_number": bill.bill_number,
                     "title": bill.title,
-                    "vote_count": vote_count,
+                    "popularity_score": bill.popularity_score,
                     "latest_action_date": bill.latest_action_date.isoformat() if bill.latest_action_date else None,
                 }
-                for bill, vote_count in bills_with_votes
+                for bill in popular_bills
             ]
     
     return result
+
+
+@router.post("/update-popularity")
+async def update_bill_popularity(
+    bill_updates: List[dict],
+    db: Session = Depends(get_db),
+    _admin: None = Depends(require_admin_key),
+):
+    """
+    Update popularity scores for bills (called by n8n after web search).
+    Expects: [{"bill_id": "uuid", "popularity_score": 123}, ...]
+    """
+    from datetime import datetime, timezone
+    
+    updated_count = 0
+    errors = []
+    
+    for update in bill_updates:
+        try:
+            bill_id = UUID(update.get("bill_id"))
+            score = int(update.get("popularity_score", 0))
+            
+            bill = db.query(Bill).filter(Bill.id == bill_id).first()
+            if bill:
+                bill.popularity_score = score
+                bill.popularity_updated_at = datetime.now(timezone.utc)
+                bill.is_popular = score > 50  # Mark as popular if score > 50
+                updated_count += 1
+            else:
+                errors.append(f"Bill {bill_id} not found")
+        except Exception as e:
+            errors.append(f"Error updating bill {update.get('bill_id')}: {str(e)}")
+    
+    db.commit()
+    
+    return {
+        "updated": updated_count,
+        "total": len(bill_updates),
+        "errors": errors if errors else None
+    }
