@@ -34,7 +34,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const response = $input.first().json;\nconst bills = response.bills || [];\n\n// Filter for enacted bills\nconst enacted = bills.filter(bill => {\n  const action = (bill.latestAction?.text || '').toLowerCase();\n  return action.includes('became public law') || \n         action.includes('became law') ||\n         action.includes('signed by president');\n});\n\nif (enacted.length === 0) {\n  return [];\n}\n\n// Map to ingest format\nreturn enacted.map(bill => ({\n  json: {\n    congress: bill.congress,\n    bill_type: (bill.type || 'hr').toLowerCase(),\n    bill_number: parseInt(bill.number, 10)\n  }\n}));"
+        "jsCode": "const response = $input.first().json;\nconst bills = response.bills || [];\n\n// Filter for enacted bills\nconst enacted = bills.filter(bill => {\n  const action = (bill.latestAction?.text || '').toLowerCase();\n  return action.includes('became public law') || \n         action.includes('became law') ||\n         action.includes('signed by president');\n});\n\nif (enacted.length === 0) {\n  // Return empty marker so workflow continues to next congress\n  return [{ json: { skip: true } }];\n}\n\n// Map to ingest format\nreturn enacted.map(bill => ({\n  json: {\n    congress: bill.congress,\n    bill_type: (bill.type || 'hr').toLowerCase(),\n    bill_number: parseInt(bill.number, 10)\n  }\n}));"
       },
       "name": "Filter Enacted",
       "type": "n8n-nodes-base.code",
@@ -55,6 +55,35 @@
     },
     {
       "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "not-skip",
+              "leftValue": "={{ $json.skip }}",
+              "rightValue": "",
+              "operator": {
+                "type": "exists",
+                "operation": "notExists"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Check Valid Bill",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1250, 300],
+      "id": "check-valid"
+    },
+    {
+      "parameters": {
         "method": "POST",
         "url": "http://98.94.94.17/api/ingest/bill",
         "authentication": "genericCredentialType",
@@ -67,7 +96,7 @@
       "name": "Ingest Bill",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [1250, 300],
+      "position": [1450, 200],
       "id": "ingest-bill",
       "credentials": {
         "httpHeaderAuth": {
@@ -85,8 +114,18 @@
       "name": "Wait",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
-      "position": [1450, 300],
+      "position": [1650, 200],
       "id": "wait"
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all();"
+      },
+      "name": "Merge",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1650, 400],
+      "id": "merge"
     }
   ],
   "connections": {
@@ -104,14 +143,23 @@
     },
     "Batch Bills": {
       "main": [
-        [{"node": "Ingest Bill", "type": "main", "index": 0}],
+        [{"node": "Check Valid Bill", "type": "main", "index": 0}],
         []
+      ]
+    },
+    "Check Valid Bill": {
+      "main": [
+        [{"node": "Ingest Bill", "type": "main", "index": 0}],
+        [{"node": "Merge", "type": "main", "index": 0}]
       ]
     },
     "Ingest Bill": {
       "main": [[{"node": "Wait", "type": "main", "index": 0}]]
     },
     "Wait": {
+      "main": [[{"node": "Merge", "type": "main", "index": 0}]]
+    },
+    "Merge": {
       "main": [[{"node": "Batch Bills", "type": "main", "index": 0}]]
     }
   },
