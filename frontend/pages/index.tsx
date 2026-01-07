@@ -19,14 +19,29 @@ export default function Home() {
   const [statusFilter, setStatusFilter] = useState<BillStatus | ''>('');
   const [activeTab, setActiveTab] = useState<'voting' | 'enacted'>('voting');
   
-  // President display state
+  // On-demand president fetching
+  const [fetchingPresident, setFetchingPresident] = useState<string | null>(null);
+  const [fetchedPresidents, setFetchedPresidents] = useState<Set<string>>(new Set());
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [collapsedPresidents, setCollapsedPresidents] = useState<Set<string>>(new Set());
   const [popularByPresident, setPopularByPresident] = useState<Record<string, PopularBillByPresident[]>>({});
 
-  // Initialize all presidents as collapsed on mount
+  // Load persisted state from localStorage on mount
   useEffect(() => {
-    const allPresidentNames = Object.keys(PRESIDENT_CONGRESS_MAP);
-    setCollapsedPresidents(new Set(allPresidentNames));
+    try {
+      const storedFetchedPresidents = localStorage.getItem('justabill_fetchedPresidents');
+      
+      if (storedFetchedPresidents) {
+        const parsed = JSON.parse(storedFetchedPresidents);
+        setFetchedPresidents(new Set(parsed));
+      }
+
+      // Initialize all presidents as collapsed
+      const allPresidentNames = Object.keys(PRESIDENT_CONGRESS_MAP);
+      setCollapsedPresidents(new Set(allPresidentNames));
+    } catch (e) {
+      console.error('Error loading persisted state:', e);
+    }
   }, []);
 
   // Read tab from URL on mount
@@ -59,6 +74,13 @@ export default function Home() {
     );
   };
 
+  // Persist fetchedPresidents to localStorage
+  useEffect(() => {
+    if (fetchedPresidents.size > 0) {
+      localStorage.setItem('justabill_fetchedPresidents', JSON.stringify(Array.from(fetchedPresidents)));
+    }
+  }, [fetchedPresidents]);
+
   useEffect(() => {
     loadBills();
   }, [page, statusFilter]);
@@ -69,7 +91,29 @@ export default function Home() {
     loadEnactedBills();
   }, []);
 
-
+  // Auto-fetch all presidents when enacted tab is loaded (only once)
+  useEffect(() => {
+    if (activeTab === 'enacted' && !loadingEnacted) {
+      const presidentNames = Object.keys(PRESIDENT_CONGRESS_MAP);
+      
+      // Only auto-fetch presidents that haven't been fetched yet
+      const unfetchedPresidents = presidentNames.filter(name => !fetchedPresidents.has(name));
+      
+      if (unfetchedPresidents.length > 0) {
+        console.log(`Auto-fetching ${unfetchedPresidents.length} presidents:`, unfetchedPresidents);
+        
+        // Fetch presidents sequentially with a delay to avoid overwhelming the API
+        let delay = 0;
+        unfetchedPresidents.forEach((presidentName, index) => {
+          setTimeout(() => {
+            console.log(`Auto-fetching president ${index + 1}/${unfetchedPresidents.length}: ${presidentName}`);
+            handleFetchPresidentBills(presidentName);
+          }, delay);
+          delay += 2000; // 2 second delay between each president fetch
+        });
+      }
+    }
+  }, [activeTab, loadingEnacted, fetchedPresidents]);
 
   const loadBills = async () => {
     try {
@@ -141,7 +185,41 @@ export default function Home() {
     }
   };
 
-
+  // Handle clicking on a president to fetch their enacted bills
+  const handleFetchPresidentBills = async (presidentName: string) => {
+    // Map display name to API name
+    let apiName = presidentName;
+    
+    if (fetchingPresident) return;
+    if (fetchedPresidents.has(apiName)) return;
+    
+    setFetchingPresident(apiName);
+    setFetchError(null);
+    
+    try {
+      const result = await fetchEnactedByPresident(apiName);
+      console.log('Fetch result:', result);
+      
+      // Mark as fetched
+      setFetchedPresidents(prev => {
+        const newSet = new Set(Array.from(prev));
+        newSet.add(apiName);
+        return newSet;
+      });
+      
+      // Reload enacted bills multiple times as n8n ingests them
+      // First reload after 3s, then 10s, then 30s to catch stragglers
+      setTimeout(() => loadEnactedBills(), 3000);
+      setTimeout(() => loadEnactedBills(), 10000);
+      setTimeout(() => loadEnactedBills(), 30000);
+      
+    } catch (error: any) {
+      console.error('Error fetching president bills:', error);
+      setFetchError(error?.response?.data?.detail || error.message || 'Failed to fetch bills');
+    } finally {
+      setFetchingPresident(null);
+    }
+  };
   
   // Toggle collapse state for a president
   const togglePresidentCollapse = (presName: string) => {
@@ -512,8 +590,36 @@ export default function Home() {
             <div className="bg-white rounded-lg shadow px-6 py-4">
               <h2 className="text-xl font-semibold text-gray-900">✅ Signed into Law</h2>
               <p className="text-sm text-gray-500 mt-1">
-                Bills grouped by president. Data is managed by administrators.
+                Bills grouped by president. Data is automatically loaded on first visit.
               </p>
+              
+              {/* Auto-fetch progress indicator */}
+              {(() => {
+                const totalPresidents = Object.keys(PRESIDENT_CONGRESS_MAP).length;
+                const fetchedCount = fetchedPresidents.size;
+                const progress = (fetchedCount / totalPresidents) * 100;
+                
+                if (fetchedCount < totalPresidents && fetchedCount > 0) {
+                  return (
+                    <div className="mt-3 bg-blue-50 px-3 py-2 rounded">
+                      <div className="flex items-center justify-between text-sm mb-1">
+                        <span className="text-blue-700 font-medium">Loading presidents...</span>
+                        <span className="text-blue-600">{fetchedCount}/{totalPresidents}</span>
+                      </div>
+                      <div className="w-full bg-blue-200 rounded-full h-1.5">
+                        <div 
+                          className="bg-blue-600 h-1.5 rounded-full transition-all duration-300"
+                          style={{ width: `${progress}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
+              
+              {fetchError && (
+                <div className="mt-2 text-sm text-red-600 bg-red-50 px-3 py-2 rounded">
                   {fetchError}
                 </div>
               )}
@@ -549,8 +655,11 @@ export default function Home() {
                 
                 return allPresidents.map(({ name: presName, start, end, years, party }) => {
                   const bills = billsByPresident.get(presName.replace(' 2nd', '')) || [];
+                  const isFetching = fetchingPresident === presName;
+                  const hasFetched = fetchedPresidents.has(presName);
                   const displayName = presName.replace(' 2nd', '');
                   const isSecondTerm = presName.includes('2nd');
+                  const isCurrentTerm = presName === 'Donald Trump 2nd'; // 119th Congress, just started
                   const presidentId = `president-${presName.replace(/\s+/g, '-')}`;
                   const isCollapsed = collapsedPresidents.has(presName);
                   const hasBills = bills.length > 0;
@@ -559,13 +668,19 @@ export default function Home() {
                     <div key={presName} id={presidentId} className="bg-white rounded-lg shadow overflow-hidden">
                       {/* President Header - Clickable */}
                       <button
-                        onClick={() => hasBills && togglePresidentCollapse(presName)}
-                        disabled={!hasBills}
+                        onClick={() => {
+                          if (hasBills) {
+                            togglePresidentCollapse(presName);
+                          } else if (!hasFetched) {
+                            handleFetchPresidentBills(presName);
+                          }
+                        }}
+                        disabled={isFetching || (!hasBills && hasFetched)}
                         className={`w-full px-6 py-3 border-b text-left transition-colors ${
                           party === 'R' 
-                            ? 'bg-red-50 border-red-200' 
-                            : 'bg-blue-50 border-blue-200'
-                        } ${hasBills ? 'hover:bg-' + (party === 'R' ? 'red' : 'blue') + '-100 cursor-pointer' : 'cursor-default'}`}
+                            ? 'bg-red-50 border-red-200 hover:bg-red-100' 
+                            : 'bg-blue-50 border-blue-200 hover:bg-blue-100'
+                        } ${isFetching ? 'opacity-75' : ''} ${!hasBills && hasFetched ? 'cursor-default' : 'cursor-pointer'}`}
                       >
                         <div className="flex items-center gap-3">
                           {/* Collapse/Expand chevron for presidents with bills */}
@@ -588,7 +703,12 @@ export default function Home() {
                             </p>
                           </div>
                           
-                          {hasBills ? (
+                          {isFetching ? (
+                            <div className="flex items-center gap-2">
+                              <div className="animate-spin h-4 w-4 border-2 border-gray-400 border-t-transparent rounded-full"></div>
+                              <span className="text-xs text-gray-500">Fetching...</span>
+                            </div>
+                          ) : hasBills ? (
                             <span className={`px-2 py-0.5 text-xs font-medium rounded ${
                               party === 'R' 
                                 ? 'bg-red-100 text-red-800' 
@@ -599,11 +719,39 @@ export default function Home() {
                                 {isCollapsed ? '(click to expand)' : '(click to collapse)'}
                               </span>
                             </span>
+                          ) : hasFetched ? (
+                            <span className="text-xs text-gray-400">✓ Checked</span>
                           ) : (
-                            <span className="text-xs text-gray-400">No bills</span>
+                            <span className="text-xs text-gray-400 flex items-center gap-1">
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                              </svg>
+                              Click to load
+                            </span>
                           )}
                         </div>
                       </button>
+                      
+                      {/* No bills message with refresh for fetched presidents */}
+                      {hasFetched && bills.length === 0 && (
+                        <div className="px-6 py-4 text-center bg-gray-50">
+                          {isCurrentTerm ? (
+                            <>
+                              <p className="text-sm text-gray-600">📋 No enacted laws yet</p>
+                              <p className="text-xs text-gray-400 mt-1">
+                                This term just began — bills are still working through Congress
+                              </p>
+                            </>
+                          ) : (
+                            <>
+                              <p className="text-sm text-gray-600">📋 No enacted laws found in database</p>
+                              <p className="text-xs text-gray-400 mt-1">
+                                Bills may still be processing or none matched the criteria
+                              </p>
+                            </>
+                          )}
+                        </div>
+                      )}
                       
                       {/* Bills under this president */}
                       {hasBills && !isCollapsed && (

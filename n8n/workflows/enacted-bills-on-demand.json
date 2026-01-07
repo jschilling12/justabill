@@ -2,55 +2,37 @@
   "name": "Enacted Bills On-Demand",
   "nodes": [
     {
-      "parameters": {
-        "httpMethod": "POST",
-        "path": "enacted-bills-fetch",
-        "authentication": "headerAuth",
-        "responseMode": "responseNode",
-        "options": {}
-      },
-      "name": "Webhook",
-      "type": "n8n-nodes-base.webhook",
-      "typeVersion": 1.1,
+      "parameters": {},
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
       "position": [
         250,
         300
-      ],
-      "webhookId": "enacted-bills-on-demand",
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "n8n-webhook-auth",
-          "name": "Webhook Auth"
-        }
-      }
+      ]
     },
     {
       "parameters": {
-        "values": {
-          "number": [
-            {
-              "name": "start_congress",
-              "value": "={{ $json.body.start_congress || 119 }}"
-            },
-            {
-              "name": "end_congress",
-              "value": "={{ $json.body.end_congress || 119 }}"
-            }
-          ],
-          "string": [
-            {
-              "name": "president_name",
-              "value": "={{ $json.body.president_name || 'Unknown' }}"
-            }
-          ]
-        },
-        "options": {}
+        "jsCode": "// Generate list of all presidents to fetch\nconst PRESIDENT_CONGRESS_MAP = {\n  \"Donald Trump 2nd\": { start: 119, end: 119 },\n  \"Joe Biden\": { start: 117, end: 118 },\n  \"Donald Trump\": { start: 115, end: 116 },\n  \"Barack Obama\": { start: 111, end: 114 },\n  \"George W. Bush\": { start: 107, end: 110 },\n  \"Bill Clinton\": { start: 103, end: 106 },\n  \"George H.W. Bush\": { start: 101, end: 102 },\n};\n\nconst presidents = Object.entries(PRESIDENT_CONGRESS_MAP).map(([name, range]) => ({\n  json: {\n    president_name: name,\n    start_congress: range.start,\n    end_congress: range.end\n  }\n}));\n\nreturn presidents;"
       },
-      "name": "Extract Parameters",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.2,
+      "name": "Generate All Presidents",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
         450,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "name": "Split Presidents",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        650,
         300
       ]
     },
@@ -322,45 +304,9 @@
           "name": "Admin API Key"
         }
       }
-    },
-    {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ $('Summarize Results').first().json }}",
-        "options": {}
-      },
-      "name": "Respond to Webhook",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1,
-      "position": [
-        3450,
-        300
-      ]
     }
   ],
   "connections": {
-    "Webhook": {
-      "main": [
-        [
-          {
-            "node": "Extract Parameters",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Extract Parameters": {
-      "main": [
-        [
-          {
-            "node": "Generate Congress List",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Generate Congress List": {
       "main": [
         [
@@ -442,6 +388,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Split Presidents",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -516,6 +469,39 @@
         [
           {
             "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Extract Parameters",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate All Presidents": {
+      "main": [
+        [
+          {
+            "node": "Split Presidents",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Presidents": {
+      "main": [
+        [
+          {
+            "node": "Generate Congress List",
             "type": "main",
             "index": 0
           }
