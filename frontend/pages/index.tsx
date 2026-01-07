@@ -118,7 +118,11 @@ export default function Home() {
       console.log('Fetch result:', result);
       
       // Mark as fetched
-      setFetchedPresidents(prev => new Set([...prev, apiName]));
+      setFetchedPresidents(prev => {
+        const newSet = new Set(Array.from(prev));
+        newSet.add(apiName);
+        return newSet;
+      });
       
       // Wait a moment then reload enacted bills
       setTimeout(() => {
