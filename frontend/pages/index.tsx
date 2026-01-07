@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/router';
 import { getBills, getBillsVoteStats, Bill, VoteStats, BillStatus, BILL_STATUS_LABELS, ACTIVE_STATUSES, getPresidentForDate, PRESIDENTS, President, fetchEnactedByPresident, PRESIDENT_CONGRESS_MAP } from '../lib/api';
 
 export default function Home() {
+  const router = useRouter();
   const [bills, setBills] = useState<Bill[]>([]);
   const [lawImpactBills, setLawImpactBills] = useState<Bill[]>([]);
   const [popularBills, setPopularBills] = useState<Bill[]>([]);
@@ -23,6 +25,36 @@ export default function Home() {
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [lastFetchTime, setLastFetchTime] = useState<Record<string, number>>({});
   const [refreshCooldown, setRefreshCooldown] = useState<Record<string, number>>({});
+
+  // Read tab from URL on mount
+  useEffect(() => {
+    if (router.isReady) {
+      const tab = router.query.tab as string;
+      if (tab === 'enacted') {
+        setActiveTab('enacted');
+      }
+      // Scroll to president if specified
+      const president = router.query.president as string;
+      if (president) {
+        setTimeout(() => {
+          const el = document.getElementById(`president-${president.replace(/\s+/g, '-')}`);
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }, 500);
+      }
+    }
+  }, [router.isReady, router.query.tab, router.query.president]);
+
+  // Update URL when tab changes
+  const handleTabChange = (tab: 'voting' | 'enacted') => {
+    setActiveTab(tab);
+    router.replace(
+      { pathname: '/', query: tab === 'enacted' ? { tab: 'enacted' } : {} },
+      undefined,
+      { shallow: true }
+    );
+  };
 
   // Cooldown timer effect
   useEffect(() => {
@@ -266,7 +298,7 @@ export default function Home() {
           <div className="border-b border-gray-200">
             <nav className="-mb-px flex space-x-8">
               <button
-                onClick={() => setActiveTab('voting')}
+                onClick={() => handleTabChange('voting')}
                 className={`py-2 px-1 border-b-2 font-medium text-sm ${
                   activeTab === 'voting'
                     ? 'border-blue-500 text-blue-600'
@@ -276,7 +308,7 @@ export default function Home() {
                 🗳️ Bills for Voting
               </button>
               <button
-                onClick={() => setActiveTab('enacted')}
+                onClick={() => handleTabChange('enacted')}
                 className={`py-2 px-1 border-b-2 font-medium text-sm ${
                   activeTab === 'enacted'
                     ? 'border-green-500 text-green-600'
@@ -582,9 +614,10 @@ export default function Home() {
                   const isSecondTerm = presName.includes('2nd');
                   const isCurrentTerm = presName === 'Donald Trump 2nd'; // 119th Congress, just started
                   const cooldown = getCooldownRemaining(presName);
+                  const presidentId = `president-${presName.replace(/\s+/g, '-')}`;
                   
                   return (
-                    <div key={presName} className="bg-white rounded-lg shadow overflow-hidden">
+                    <div key={presName} id={presidentId} className="bg-white rounded-lg shadow overflow-hidden">
                       {/* President Header - Clickable */}
                       <button
                         onClick={() => !hasFetched && handleFetchPresidentBills(presName)}
@@ -693,7 +726,7 @@ export default function Home() {
                           {bills.map((bill) => (
                             <Link
                               key={bill.id}
-                              href={`/bills/${bill.id}`}
+                              href={`/bills/${bill.id}?from=enacted&president=${encodeURIComponent(presName)}`}
                               className="block px-6 py-4 hover:bg-green-50 transition-colors"
                             >
                               <div className="flex items-start justify-between">

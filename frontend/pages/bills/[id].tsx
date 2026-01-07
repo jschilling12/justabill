@@ -21,7 +21,7 @@ import { getAccessToken } from '../../lib/auth';
 
 export default function BillPage() {
   const router = useRouter();
-  const { id } = router.query;
+  const { id, from, president } = router.query;
   
   const [bill, setBill] = useState<BillWithSections | null>(null);
   const [loading, setLoading] = useState(true);
@@ -37,6 +37,24 @@ export default function BillPage() {
   const [me, setMe] = useState<any>(null);
   const [showAffiliationPrompt, setShowAffiliationPrompt] = useState(false);
   const [affiliationInput, setAffiliationInput] = useState('');
+
+  // Build back URL based on where user came from
+  const getBackUrl = () => {
+    if (from === 'enacted' && president) {
+      return `/?tab=enacted&president=${encodeURIComponent(president as string)}`;
+    }
+    if (from === 'enacted') {
+      return '/?tab=enacted';
+    }
+    return '/';
+  };
+
+  const getBackLabel = () => {
+    if (from === 'enacted') {
+      return '← Back to Signed into Law';
+    }
+    return '← Back to bills';
+  };
 
   useEffect(() => {
     if (id) {
@@ -257,8 +275,8 @@ export default function BillPage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <p className="text-gray-600">Bill not found</p>
-          <Link href="/" className="mt-4 text-blue-600 hover:underline">
-            Back to bills list
+          <Link href={getBackUrl()} className="mt-4 text-blue-600 hover:underline">
+            {getBackLabel()}
           </Link>
         </div>
       </div>
@@ -270,8 +288,8 @@ export default function BillPage() {
       {/* Header */}
       <header className="bg-white shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <Link href="/" className="text-sm text-blue-600 hover:underline mb-2 inline-block">
-            ← Back to bills
+          <Link href={getBackUrl()} className="text-sm text-blue-600 hover:underline mb-2 inline-block">
+            {getBackLabel()}
           </Link>
           <h1 className="text-3xl font-bold text-gray-900">
             {bill.bill_type.toUpperCase()}. {bill.bill_number}
