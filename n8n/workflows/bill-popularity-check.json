@@ -17,7 +17,10 @@
       "name": "Schedule Trigger",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1,
-      "position": [250, 300],
+      "position": [
+        250,
+        300
+      ],
       "id": "schedule-trigger-popularity"
     },
     {
@@ -45,7 +48,10 @@
       "name": "Fetch Recent Law Impact Bills",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 3,
-      "position": [450, 300],
+      "position": [
+        450,
+        300
+      ],
       "id": "fetch-bills-popularity"
     },
     {
@@ -55,18 +61,26 @@
       "name": "Extract Bills",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [650, 300],
+      "position": [
+        650,
+        300
+      ],
       "id": "extract-bills-popularity"
     },
     {
       "parameters": {
         "batchSize": 5,
-        "options": {}
+        "options": {
+          "reset": false
+        }
       },
       "name": "Split In Batches",
       "type": "n8n-nodes-base.splitInBatches",
       "typeVersion": 3,
-      "position": [850, 300],
+      "position": [
+        850,
+        300
+      ],
       "id": "split-batches-popularity"
     },
     {
@@ -97,12 +111,22 @@
             }
           ]
         },
-        "options": {}
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 2000
+            }
+          }
+        }
       },
       "name": "Search Web for Bill",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 3,
-      "position": [1050, 300],
+      "position": [
+        1050,
+        300
+      ],
       "continueOnFail": true,
       "id": "search-web-popularity",
       "notes": "Replace with your preferred search API (Google Custom Search, Bing, NewsAPI, etc.)\nThis example uses Google Custom Search API."
@@ -114,7 +138,10 @@
       "name": "Calculate Popularity",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1250, 300],
+      "position": [
+        1250,
+        300
+      ],
       "id": "calculate-popularity"
     },
     {
@@ -129,7 +156,10 @@
       "name": "Update Bill Popularity",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 3,
-      "position": [1450, 300],
+      "position": [
+        1450,
+        300
+      ],
       "continueOnFail": true,
       "id": "update-popularity"
     },
@@ -141,35 +171,102 @@
       "name": "Wait",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1,
-      "position": [1650, 300],
+      "position": [
+        1650,
+        300
+      ],
       "id": "wait-popularity",
       "notes": "Rate limiting delay between API calls"
     }
   ],
   "connections": {
     "Schedule Trigger": {
-      "main": [[{"node": "Fetch Recent Law Impact Bills", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Fetch Recent Law Impact Bills",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Fetch Recent Law Impact Bills": {
-      "main": [[{"node": "Extract Bills", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Extract Bills",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Extract Bills": {
-      "main": [[{"node": "Split In Batches", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Split In Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Split In Batches": {
-      "main": [[{"node": "Search Web for Bill", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Search Web for Bill",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Search Web for Bill": {
-      "main": [[{"node": "Calculate Popularity", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Calculate Popularity",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Calculate Popularity": {
-      "main": [[{"node": "Update Bill Popularity", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Update Bill Popularity",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Update Bill Popularity": {
-      "main": [[{"node": "Wait", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Wait": {
-      "main": [[{"node": "Split In Batches", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Split In Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "settings": {
