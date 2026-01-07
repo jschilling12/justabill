@@ -84,6 +84,10 @@ export interface BillSection {
 
 export interface BillWithSections extends Bill {
   sections: BillSection[];
+  source_urls?: {
+    congress_gov?: string;
+    govinfo?: string;
+  };
 }
 
 export interface UserBillSummary {
