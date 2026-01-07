@@ -131,6 +131,30 @@ export default function Home() {
     loadEnactedBills();
   }, []);
 
+  // Auto-fetch all presidents when enacted tab is loaded (only once)
+  useEffect(() => {
+    if (activeTab === 'enacted' && !loadingEnacted) {
+      const presidentNames = Object.keys(PRESIDENT_CONGRESS_MAP);
+      
+      // Only auto-fetch presidents that haven't been fetched yet
+      const unfetchedPresidents = presidentNames.filter(name => !fetchedPresidents.has(name));
+      
+      if (unfetchedPresidents.length > 0) {
+        console.log(`Auto-fetching ${unfetchedPresidents.length} presidents:`, unfetchedPresidents);
+        
+        // Fetch presidents sequentially with a delay to avoid overwhelming the API
+        let delay = 0;
+        unfetchedPresidents.forEach((presidentName, index) => {
+          setTimeout(() => {
+            console.log(`Auto-fetching president ${index + 1}/${unfetchedPresidents.length}: ${presidentName}`);
+            handleFetchPresidentBills(presidentName);
+          }, delay);
+          delay += 2000; // 2 second delay between each president fetch
+        });
+      }
+    }
+  }, [activeTab, loadingEnacted, fetchedPresidents]);
+
   const loadBills = async () => {
     try {
       setLoading(true);
@@ -640,8 +664,34 @@ export default function Home() {
             <div className="bg-white rounded-lg shadow px-6 py-4">
               <h2 className="text-xl font-semibold text-gray-900">✅ Signed into Law</h2>
               <p className="text-sm text-gray-500 mt-1">
-                Click on a president to load enacted bills from their term. Bills are fetched on-demand.
+                Bills grouped by president. Data is automatically loaded on first visit.
               </p>
+              
+              {/* Auto-fetch progress indicator */}
+              {(() => {
+                const totalPresidents = Object.keys(PRESIDENT_CONGRESS_MAP).length;
+                const fetchedCount = fetchedPresidents.size;
+                const progress = (fetchedCount / totalPresidents) * 100;
+                
+                if (fetchedCount < totalPresidents && fetchedCount > 0) {
+                  return (
+                    <div className="mt-3 bg-blue-50 px-3 py-2 rounded">
+                      <div className="flex items-center justify-between text-sm mb-1">
+                        <span className="text-blue-700 font-medium">Loading presidents...</span>
+                        <span className="text-blue-600">{fetchedCount}/{totalPresidents}</span>
+                      </div>
+                      <div className="w-full bg-blue-200 rounded-full h-1.5">
+                        <div 
+                          className="bg-blue-600 h-1.5 rounded-full transition-all duration-300"
+                          style={{ width: `${progress}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
+              
               {fetchError && (
                 <div className="mt-2 text-sm text-red-600 bg-red-50 px-3 py-2 rounded">
                   {fetchError}
