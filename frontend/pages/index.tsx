@@ -65,10 +65,10 @@ export default function Home() {
   const loadPopularBills = async () => {
     try {
       setLoadingPopular(true);
-      // Fetch top 5 popular bills (exclude enacted since those aren't for voting)
-      const data = await getBills(1, 5, true);
+      // Fetch top 3 popular bills (exclude enacted since those aren't for voting)
+      const data = await getBills(1, 3, true);
       // Filter out enacted bills from popular
-      const activeBills = data.items.filter((b: Bill) => b.status !== 'enacted');
+      const activeBills = data.items.filter((b: Bill) => b.status !== 'enacted').slice(0, 3);
       setPopularBills(activeBills);
       const stats = await getBillsVoteStats(activeBills.map((b: Bill) => b.id));
       setStatsByBill((prev) => ({ ...prev, ...stats }));
@@ -248,78 +248,70 @@ export default function Home() {
         {activeTab === 'voting' ? (
           <>
 
-        {/* Popular Bills */}
+        {/* Popular Bills - Top 3 Featured */}
         <div className="mb-8">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-semibold text-gray-900">🔥 Popular now</h2>
-            <p className="text-xs text-gray-500">
-              Bills with significant public attention based on web mentions.
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-bold text-gray-900">🔥 Popular now</h2>
+            <p className="text-sm text-gray-500">
+              Bills with significant public attention
             </p>
           </div>
-          <div className="bg-white rounded-lg shadow">
-            {loadingPopular ? (
-              <div className="px-6 py-6 text-center text-sm text-gray-500">
-                Loading popular bills...
-              </div>
-            ) : popularBills.length === 0 ? (
-              <div className="px-6 py-6 text-center text-sm text-gray-500">
-                No popular bills at the moment. Check back soon!
-              </div>
-            ) : (
-              <div className="divide-y divide-gray-200">
-                {popularBills.map((bill) => (
-                  <Link
-                    key={bill.id}
-                    href={`/bills/${bill.id}`}
-                    className="block px-6 py-3 hover:bg-gray-50 transition-colors"
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <h3 className="text-sm font-medium text-gray-900">
-                            {bill.bill_type.toUpperCase()}. {bill.bill_number}
-                            {extractShortTitle(bill.title) && (
-                              <span className="font-normal text-gray-700"> - {extractShortTitle(bill.title)}</span>
-                            )}
-                          </h3>
-                          {bill.popularity_score && bill.popularity_score > 0 && (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800">
-                              {bill.popularity_score} mentions
-                            </span>
-                          )}
-                        </div>
-                        <p className="mt-1 text-xs text-gray-600 line-clamp-1">
-                          {bill.title || 'No title available'}
-                        </p>
-                        <div className="mt-1 flex items-center space-x-3 text-[11px] text-gray-500">
-                          <span className="capitalize">{bill.status?.replace(/_/g, ' ') || 'Status unknown'}</span>
-                          {bill.latest_action_date && (
-                            <span>Updated: {formatDate(bill.latest_action_date)}</span>
-                          )}
-                        </div>
-                        {renderVotePreview(bill.id)}
-                      </div>
-                      <div className="ml-3 flex-shrink-0">
-                        <svg
-                          className="h-4 w-4 text-gray-400"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M9 5l7 7-7 7"
-                          />
-                        </svg>
-                      </div>
+          {loadingPopular ? (
+            <div className="bg-white rounded-xl shadow-lg px-6 py-8 text-center text-gray-500">
+              Loading popular bills...
+            </div>
+          ) : popularBills.length === 0 ? (
+            <div className="bg-white rounded-xl shadow-lg px-6 py-8 text-center text-gray-500">
+              No popular bills at the moment. Check back soon!
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {popularBills.map((bill, index) => (
+                <Link
+                  key={bill.id}
+                  href={`/bills/${bill.id}`}
+                  className={`block rounded-xl shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-1 ${
+                    index === 0 
+                      ? 'bg-gradient-to-br from-orange-50 to-red-50 border-2 border-orange-200' 
+                      : 'bg-white border border-gray-200'
+                  }`}
+                >
+                  <div className="p-5">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className={`text-2xl ${index === 0 ? '' : 'opacity-70'}`}>
+                        {index === 0 ? '🥇' : index === 1 ? '🥈' : '🥉'}
+                      </span>
+                      {bill.popularity_score && bill.popularity_score > 0 && (
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-orange-100 text-orange-800">
+                          🔥 {bill.popularity_score} mentions
+                        </span>
+                      )}
                     </div>
-                  </Link>
-                ))}
-              </div>
-            )}
-          </div>
+                    <h3 className={`font-bold text-gray-900 ${index === 0 ? 'text-lg' : 'text-base'}`}>
+                      {bill.bill_type.toUpperCase()}. {bill.bill_number}
+                    </h3>
+                    <p className={`mt-1 font-medium ${index === 0 ? 'text-base text-gray-800' : 'text-sm text-gray-700'}`}>
+                      {extractShortTitle(bill.title) || 'Untitled'}
+                    </p>
+                    <p className="mt-2 text-xs text-gray-500 line-clamp-2">
+                      {bill.title || 'No description available'}
+                    </p>
+                    <div className="mt-3 flex items-center justify-between">
+                      <span className="text-xs text-gray-500 capitalize">
+                        {bill.status?.replace(/_/g, ' ') || 'Status unknown'}
+                      </span>
+                      <span className="text-xs font-medium text-blue-600 flex items-center gap-1">
+                        Vote now →
+                      </span>
+                    </div>
+                    <div className="mt-2">
+                      {renderVotePreview(bill.id)}
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Likely law-impact bills */}
