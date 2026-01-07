@@ -6,136 +6,52 @@
       "name": "Manual Trigger",
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
-      "position": [
-        250,
-        300
-      ]
+      "position": [250, 300],
+      "id": "manual-trigger"
     },
     {
       "parameters": {
-        "jsCode": "// Generate list of all presidents to fetch\nconst PRESIDENT_CONGRESS_MAP = {\n  \"Donald Trump 2nd\": { start: 119, end: 119 },\n  \"Joe Biden\": { start: 117, end: 118 },\n  \"Donald Trump\": { start: 115, end: 116 },\n  \"Barack Obama\": { start: 111, end: 114 },\n  \"George W. Bush\": { start: 107, end: 110 },\n  \"Bill Clinton\": { start: 103, end: 106 },\n  \"George H.W. Bush\": { start: 101, end: 102 },\n};\n\nconst presidents = Object.entries(PRESIDENT_CONGRESS_MAP).map(([name, range]) => ({\n  json: {\n    president_name: name,\n    start_congress: range.start,\n    end_congress: range.end\n  }\n}));\n\nreturn presidents;"
+        "jsCode": "// Generate list of all presidents with their congress sessions\nconst presidents = [\n  { name: \"Donald Trump 2nd\", congresses: [119] },\n  { name: \"Joe Biden\", congresses: [117, 118] },\n  { name: \"Donald Trump\", congresses: [115, 116] },\n  { name: \"Barack Obama\", congresses: [111, 112, 113, 114] },\n  { name: \"George W. Bush\", congresses: [107, 108, 109, 110] },\n  { name: \"Bill Clinton\", congresses: [103, 104, 105, 106] },\n  { name: \"George H.W. Bush\", congresses: [101, 102] }\n];\n\n// Flatten to one item per congress session\nconst items = [];\nfor (const pres of presidents) {\n  for (const congress of pres.congresses) {\n    items.push({\n      json: {\n        president: pres.name,\n        congress: congress\n      }\n    });\n  }\n}\n\nreturn items;"
       },
-      "name": "Generate All Presidents",
+      "name": "Generate Congress Sessions",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        450,
-        300
-      ]
-    },
-    {
-      "parameters": {
-        "batchSize": 1,
-        "options": {}
-      },
-      "name": "Split Presidents",
-      "type": "n8n-nodes-base.splitInBatches",
-      "typeVersion": 3,
-      "position": [
-        650,
-        300
-      ]
-    },
-    {
-      "parameters": {
-        "jsCode": "// Generate array of congress numbers from start to end\nconst start = $input.first().json.start_congress;\nconst end = $input.first().json.end_congress;\nconst presName = $input.first().json.president_name;\n\nconst congresses = [];\n// Iterate from higher congress to lower (or equal)\nconst low = Math.min(start, end);\nconst high = Math.max(start, end);\nfor (let c = high; c >= low; c--) {\n  congresses.push({ congress: c, president_name: presName });\n}\n\n// Return in n8n format with json wrapper\nreturn congresses.map(c => ({ json: c }));"
-      },
-      "name": "Generate Congress List",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        650,
-        300
-      ]
+      "position": [450, 300],
+      "id": "generate-sessions"
     },
     {
       "parameters": {
         "method": "GET",
-        "url": "=https://api.congress.gov/v3/bill/{{ $json.congress }}?limit=250&sort=updateDate+desc",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpQueryAuth",
-        "sendQuery": true,
-        "queryParameters": {
-          "parameters": [
-            {
-              "name": "api_key",
-              "value": "{{ $env.CONGRESS_API_KEY }}"
-            }
-          ]
-        },
-        "options": {
-          "timeout": 30000
-        }
+        "url": "=https://api.congress.gov/v3/bill/{{ $json.congress }}?limit=250&sort=updateDate+desc&api_key={{ $env.CONGRESS_API_KEY }}",
+        "options": {}
       },
-      "name": "Fetch Bills from Congress.gov",
+      "name": "Fetch Bills",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [
-        850,
-        300
-      ],
-      "retryOnFail": true,
-      "waitBetweenTries": 5000,
-      "maxTries": 3
+      "position": [650, 300],
+      "id": "fetch-bills",
+      "continueOnFail": true
     },
     {
       "parameters": {
-        "jsCode": "// Filter for enacted bills only and extract relevant data\nconst bills = $input.first().json.bills || [];\n\nconst enactedBills = bills.filter(bill => {\n  const latestAction = (bill.latestAction?.text || '').toLowerCase();\n  return latestAction.includes('became public law') || \n         latestAction.includes('became law') ||\n         latestAction.includes('signed by president');\n});\n\n// If no enacted bills, return empty array (will be caught downstream)\nif (enactedBills.length === 0) {\n  return [];\n}\n\n// Map to our ingestion format with proper n8n wrapper\nreturn enactedBills.map(bill => ({\n  json: {\n    congress: bill.congress || 119,\n    bill_type: (bill.type || 'hr').toLowerCase(),\n    bill_number: parseInt(bill.number || 0)\n  }\n}));"
+        "jsCode": "const response = $input.first().json;\nconst bills = response.bills || [];\n\n// Filter for enacted bills\nconst enacted = bills.filter(bill => {\n  const action = (bill.latestAction?.text || '').toLowerCase();\n  return action.includes('became public law') || \n         action.includes('became law') ||\n         action.includes('signed by president');\n});\n\nif (enacted.length === 0) {\n  return [];\n}\n\n// Map to ingest format\nreturn enacted.map(bill => ({\n  json: {\n    congress: bill.congress,\n    bill_type: (bill.type || 'hr').toLowerCase(),\n    bill_number: parseInt(bill.number, 10)\n  }\n}));"
       },
-      "name": "Filter Enacted Bills",
+      "name": "Filter Enacted",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        1050,
-        300
-      ],
-      "alwaysOutputData": false
+      "position": [850, 300],
+      "id": "filter-enacted"
     },
     {
       "parameters": {
         "batchSize": 5,
-        "options": {
-          "reset": false
-        }
-      },
-      "name": "Split In Batches",
-      "type": "n8n-nodes-base.splitInBatches",
-      "typeVersion": 3,
-      "position": [
-        1250,
-        300
-      ]
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict"
-          },
-          "conditions": [
-            {
-              "id": "has-bill-data",
-              "leftValue": "={{ $json.bill_number }}",
-              "rightValue": "",
-              "operator": {
-                "type": "exists",
-                "operation": "exists"
-              }
-            }
-          ],
-          "combinator": "and"
-        },
         "options": {}
       },
-      "name": "Check If Valid Bill",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
-      "position": [
-        1350,
-        300
-      ]
+      "name": "Batch Bills",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [1050, 300],
+      "id": "batch-bills"
     },
     {
       "parameters": {
@@ -145,233 +61,61 @@
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ congress: $json.congress, bill_type: $json.bill_type, bill_number: $json.bill_number }) }}",
-        "options": {
-          "allowEmptyResponseBody": true
-        }
+        "jsonBody": "={{ $json }}",
+        "options": {}
       },
-      "name": "Ingest Enacted Bill",
+      "name": "Ingest Bill",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [
-        1550,
-        200
-      ],
+      "position": [1250, 300],
+      "id": "ingest-bill",
       "credentials": {
         "httpHeaderAuth": {
           "id": "admin-api-key",
           "name": "Admin API Key"
         }
       },
-      "continueOnFail": true,
-      "retryOnFail": true,
-      "waitBetweenTries": 3000,
-      "maxTries": 2
+      "continueOnFail": true
     },
     {
       "parameters": {
         "amount": 2,
         "unit": "seconds"
       },
-      "name": "Wait (Rate Limit)",
+      "name": "Wait",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
-      "position": [
-        1750,
-        200
-      ]
-    },
-    {
-      "parameters": {
-        "jsCode": "// No-op to merge paths\nreturn $input.all();"
-      },
-      "name": "Merge Paths",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1750,
-        400
-      ]
-    },
-    {
-      "parameters": {
-        "jsCode": "// Summarize results\nconst items = $input.all();\n\nlet success = 0;\nlet failed = 0;\nlet skipped = 0;\n\nfor (const item of items) {\n  if (item.json.error) {\n    failed++;\n  } else if (item.json.status === 'unchanged' || item.json.status === 'partial') {\n    skipped++;\n  } else {\n    success++;\n  }\n}\n\nreturn [{\n  json: {\n    total_processed: items.length,\n    success: success,\n    failed: failed,\n    skipped: skipped,\n    timestamp: new Date().toISOString()\n  }\n}];"
-      },
-      "name": "Summarize Results",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1850,
-        300
-      ]
+      "position": [1450, 300],
+      "id": "wait"
     }
   ],
   "connections": {
-    "Generate Congress List": {
-      "main": [
-        [
-          {
-            "node": "Fetch Bills from Congress.gov",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Fetch Bills from Congress.gov": {
-      "main": [
-        [
-          {
-            "node": "Filter Enacted Bills",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Filter Enacted Bills": {
-      "main": [
-        [
-          {
-            "node": "Split In Batches",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Summarize Results",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Split In Batches": {
-      "main": [
-        [
-          {
-            "node": "Check If Valid Bill",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Summarize Results",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Check If Valid Bill": {
-      "main": [
-        [
-          {
-            "node": "Ingest Enacted Bill",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Merge Paths",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Ingest Enacted Bill": {
-      "main": [
-        [
-          {
-            "node": "Wait (Rate Limit)",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Wait (Rate Limit)": {
-      "main": [
-        [
-          {
-            "node": "Merge Paths",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Merge Paths": {
-      "main": [
-        [
-          {
-            "node": "Split In Batches",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Summarize Results": {
-      "main": [
-        [
-          {
-            "node": "Split Presidents",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Manual Trigger": {
-      "main": [
-        [
-          {
-            "node": "Generate All Presidents",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{"node": "Generate Congress Sessions", "type": "main", "index": 0}]]
     },
-    "Generate All Presidents": {
-      "main": [
-        [
-          {
-            "node": "Split Presidents",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+    "Generate Congress Sessions": {
+      "main": [[{"node": "Fetch Bills", "type": "main", "index": 0}]]
     },
-    "Split Presidents": {
+    "Fetch Bills": {
+      "main": [[{"node": "Filter Enacted", "type": "main", "index": 0}]]
+    },
+    "Filter Enacted": {
+      "main": [[{"node": "Batch Bills", "type": "main", "index": 0}]]
+    },
+    "Batch Bills": {
       "main": [
-        [
-          {
-            "node": "Generate Congress List",
-            "type": "main",
-            "index": 0
-          }
-        ],
+        [{"node": "Ingest Bill", "type": "main", "index": 0}],
         []
       ]
+    },
+    "Ingest Bill": {
+      "main": [[{"node": "Wait", "type": "main", "index": 0}]]
+    },
+    "Wait": {
+      "main": [[{"node": "Batch Bills", "type": "main", "index": 0}]]
     }
   },
   "settings": {
     "executionOrder": "v1"
-  },
-  "tags": [
-    {
-      "name": "justabill"
-    },
-    {
-      "name": "enacted"
-    },
-    {
-      "name": "on-demand"
-    }
-  ]
+  }
 }
