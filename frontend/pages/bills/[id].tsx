@@ -558,6 +558,36 @@ export default function BillPage() {
                 return parts.join(' / ');
               };
 
+              // Generate a brief description for each group based on its contents
+              const getGroupDescription = (g: { division?: string | null; title?: string | null; title_heading?: string | null; sections: BillSection[] }) => {
+                // If there's a title_heading, it already describes the group
+                if (g.title_heading) return null;
+                
+                // Generate description based on what we have
+                if (g.sections.length === 1) {
+                  const section = g.sections[0];
+                  if (section.heading) {
+                    return `Contains provisions related to ${section.heading.toLowerCase().replace(/^(the|a|an)\s+/i, '')}.`;
+                  }
+                }
+                
+                // Look at the section headings to summarize
+                const headings = g.sections
+                  .map(s => s.heading)
+                  .filter(h => h && h.length > 0)
+                  .slice(0, 3);
+                
+                if (headings.length > 0) {
+                  if (headings.length === 1) {
+                    return `Covers ${headings[0]?.toLowerCase().replace(/^(the|a|an)\s+/i, '')}.`;
+                  }
+                  return `Includes provisions on ${headings.slice(0, 2).map(h => h?.toLowerCase().replace(/^(the|a|an)\s+/i, '')).join(', ')}${g.sections.length > 2 ? `, and ${g.sections.length - 2} more` : ''}.`;
+                }
+                
+                // Fallback
+                return `Contains ${g.sections.length} legislative provision${g.sections.length > 1 ? 's' : ''} for review.`;
+              };
+
               return groups.map((group) => (
                 <div key={group.key} className="bg-white rounded-lg shadow-md overflow-hidden">
                   <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
@@ -569,7 +599,10 @@ export default function BillPage() {
                         {group.title_heading && (
                           <p className="mt-1 text-sm text-gray-600">{group.title_heading}</p>
                         )}
-                        <p className="mt-1 text-sm text-gray-500">{group.sections.length} sections</p>
+                        {!group.title_heading && getGroupDescription(group) && (
+                          <p className="mt-1 text-sm text-gray-500 italic">{getGroupDescription(group)}</p>
+                        )}
+                        <p className="mt-1 text-xs text-gray-400">{group.sections.length} section{group.sections.length !== 1 ? 's' : ''}</p>
                       </div>
                       <button
                         onClick={() => toggleGroup(group.key)}
