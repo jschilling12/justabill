@@ -222,32 +222,44 @@
     },
     {
       "parameters": {
-        "authentication": "oAuth2",
-        "operation": "search",
-        "query": "={{ $json.search_query }}",
-        "options": {
-          "num": 10,
-          "batching": {
-            "batch": {
-              "batchSize": 1,
-              "batchInterval": 2000
+        "url": "=https://www.googleapis.com/customsearch/v1",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "key",
+              "value": "={{$env.GOOGLE_API_KEY}}"
+            },
+            {
+              "name": "cx",
+              "value": "={{$env.GOOGLE_SEARCH_ENGINE_ID}}"
+            },
+            {
+              "name": "q",
+              "value": "={{$json.bill_type.toUpperCase()}} {{$json.bill_number}} {{$json.congress}}th Congress"
+            },
+            {
+              "name": "dateRestrict",
+              "value": "m3"
+            },
+            {
+              "name": "sort",
+              "value": "date"
             }
-          }
-        }
+          ]
+        },
+        "options": {}
       },
-      "name": "Google Search",
-      "type": "n8n-nodes-base.google",
-      "typeVersion": 1,
+      "name": "Search Web for Bill",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
       "position": [
         2450,
         300
       ],
-      "credentials": {
-        "googleApi": {
-          "id": "google-search-api",
-          "name": "Google Search API"
-        }
-      }
+      "continueOnFail": true,
+      "id": "search-web-popularity",
+      "notes": "Replace with your preferred search API (Google Custom Search, Bing, NewsAPI, etc.)\nThis example uses Google Custom Search API."
     },
     {
       "parameters": {
