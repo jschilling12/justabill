@@ -724,7 +724,7 @@ export default function Home() {
                               {isSecondTerm && <span className="text-xs text-gray-500 ml-1">(2nd term)</span>}
                             </h3>
                             <p className="text-xs text-gray-500">
-                              {party === 'R' ? 'Republican' : 'Democrat'} • {years} • Congress {end}-{start}
+                              {party === 'R' ? 'Republican' : 'Democrat'} • {years} • Congress {start}-{end}
                             </p>
                           </div>
                           
