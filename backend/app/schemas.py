@@ -206,6 +206,7 @@ class IngestBillRequest(BaseModel):
     bill_type: str
     bill_number: int
     metadata: Optional[Dict[str, Any]] = None
+    force_status: Optional[BillStatus] = None  # Override status inference
 
 
 class IngestBillResponse(BaseModel):

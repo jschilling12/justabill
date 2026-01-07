@@ -79,7 +79,7 @@
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ $json }}",
+        "jsonBody": "={{ JSON.stringify({ congress: $json.congress, bill_type: $json.bill_type, bill_number: $json.bill_number, force_status: 'enacted' }) }}",
         "options": {}
       },
       "name": "Ingest Bill",

@@ -105,16 +105,22 @@ async def ingest_bill(
             Bill.bill_number == request.bill_number
         ).first()
         
-        # Parse status from latest action
-        latest_action = bill_data.get('latestAction', {})
-        status_str = _map_status(latest_action)
-        try:
-            status = BillStatus(status_str)
-        except ValueError:
-            status = BillStatus.INTRODUCED
+        # Use force_status if provided, otherwise parse from latest action
+        if request.force_status:
+            status = request.force_status
+            logger.info(f"Using forced status: {status}")
+        else:
+            # Parse status from latest action
+            latest_action = bill_data.get('latestAction', {})
+            status_str = _map_status(latest_action)
+            try:
+                status = BillStatus(status_str)
+            except ValueError:
+                status = BillStatus.INTRODUCED
         
         # Skip bills that are only 'introduced' - we want bills actively moving through the process
-        if status == BillStatus.INTRODUCED:
+        # BUT allow through if force_status is set (e.g., for enacted bills workflow)
+        if status == BillStatus.INTRODUCED and not request.force_status:
             logger.info(f"Skipping bill {request.bill_type.upper()} {request.bill_number} - status is 'introduced' (not actively progressing)")
             raise HTTPException(
                 status_code=400,
