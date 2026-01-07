@@ -207,6 +207,52 @@ export const ACTIVE_STATUSES: BillStatus[] = [
   'passed_both',
 ];
 
+// President terms for grouping enacted bills
+export interface President {
+  name: string;
+  party: 'R' | 'D';
+  startDate: string;
+  endDate: string;
+}
+
+export const PRESIDENTS: President[] = [
+  { name: 'Donald Trump', party: 'R', startDate: '2025-01-20', endDate: '2029-01-20' },
+  { name: 'Joe Biden', party: 'D', startDate: '2021-01-20', endDate: '2025-01-20' },
+  { name: 'Donald Trump', party: 'R', startDate: '2017-01-20', endDate: '2021-01-20' },
+  { name: 'Barack Obama', party: 'D', startDate: '2009-01-20', endDate: '2017-01-20' },
+  { name: 'George W. Bush', party: 'R', startDate: '2001-01-20', endDate: '2009-01-20' },
+  { name: 'Bill Clinton', party: 'D', startDate: '1993-01-20', endDate: '2001-01-20' },
+];
+
+export function getPresidentForDate(dateString: string | null | undefined): President | null {
+  if (!dateString) return null;
+  const date = new Date(dateString);
+  for (const pres of PRESIDENTS) {
+    const start = new Date(pres.startDate);
+    const end = new Date(pres.endDate);
+    if (date >= start && date < end) {
+      return pres;
+    }
+  }
+  return null;
+}
+
+export function groupBillsByPresident(bills: Bill[]): Map<string, Bill[]> {
+  const grouped = new Map<string, Bill[]>();
+  
+  for (const bill of bills) {
+    const pres = getPresidentForDate(bill.latest_action_date);
+    const key = pres ? pres.name : 'Unknown';
+    
+    if (!grouped.has(key)) {
+      grouped.set(key, []);
+    }
+    grouped.get(key)!.push(bill);
+  }
+  
+  return grouped;
+}
+
 // API functions
 export async function getBills(
   page: number = 1,

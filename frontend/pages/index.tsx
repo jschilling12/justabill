@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { getBills, getBillsVoteStats, Bill, VoteStats, BillStatus, BILL_STATUS_LABELS, ACTIVE_STATUSES } from '../lib/api';
+import { getBills, getBillsVoteStats, Bill, VoteStats, BillStatus, BILL_STATUS_LABELS, ACTIVE_STATUSES, getPresidentForDate, PRESIDENTS, President } from '../lib/api';
 
 export default function Home() {
   const [bills, setBills] = useState<Bill[]>([]);
@@ -448,73 +448,118 @@ export default function Home() {
         </div>
         </>
         ) : (
-          /* Enacted Bills Tab */
-          <div className="bg-white rounded-lg shadow">
-            <div className="px-6 py-4 border-b border-gray-200">
+          /* Enacted Bills Tab - Grouped by President */
+          <div className="space-y-6">
+            <div className="bg-white rounded-lg shadow px-6 py-4">
               <h2 className="text-xl font-semibold text-gray-900">✅ Signed into Law</h2>
               <p className="text-sm text-gray-500 mt-1">
-                These bills have been enacted and are now law. View how the community voted on them.
+                Bills grouped by the President who signed them. View how the community voted.
               </p>
             </div>
+            
             {loadingEnacted ? (
-              <div className="px-6 py-12 text-center">
+              <div className="bg-white rounded-lg shadow px-6 py-12 text-center">
                 <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-green-600 mx-auto"></div>
                 <p className="mt-2 text-gray-600">Loading enacted bills...</p>
               </div>
             ) : enactedBills.length === 0 ? (
-              <div className="px-6 py-12 text-center text-gray-500">
+              <div className="bg-white rounded-lg shadow px-6 py-12 text-center text-gray-500">
                 <p className="text-lg">📜 No enacted bills yet</p>
                 <p className="mt-2 text-sm">Bills that get signed into law will appear here.</p>
               </div>
             ) : (
-              <div className="divide-y divide-gray-200">
-                {enactedBills.map((bill) => (
-                  <Link
-                    key={bill.id}
-                    href={`/bills/${bill.id}`}
-                    className="block px-6 py-4 hover:bg-green-50 transition-colors"
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="text-green-600 text-lg">✓</span>
-                          <h3 className="text-lg font-medium text-gray-900">
-                            {bill.bill_type.toUpperCase()}. {bill.bill_number}
-                            {extractShortTitle(bill.title) && (
-                              <span className="font-normal text-gray-700"> - {extractShortTitle(bill.title)}</span>
-                            )}
+              /* Group bills by president */
+              (() => {
+                const grouped = new Map<string, { president: President | null; bills: Bill[] }>();
+                
+                for (const bill of enactedBills) {
+                  const pres = getPresidentForDate(bill.latest_action_date);
+                  const key = pres ? pres.name : 'Other';
+                  
+                  if (!grouped.has(key)) {
+                    grouped.set(key, { president: pres, bills: [] });
+                  }
+                  grouped.get(key)!.bills.push(bill);
+                }
+                
+                return Array.from(grouped.entries()).map(([presName, { president, bills }]) => (
+                  <div key={presName} className="bg-white rounded-lg shadow overflow-hidden">
+                    {/* President Header */}
+                    <div className={`px-6 py-3 border-b ${
+                      president?.party === 'R' 
+                        ? 'bg-red-50 border-red-200' 
+                        : president?.party === 'D' 
+                          ? 'bg-blue-50 border-blue-200'
+                          : 'bg-gray-50 border-gray-200'
+                    }`}>
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl">🏛️</span>
+                        <div>
+                          <h3 className="font-semibold text-gray-900">
+                            President {presName}
                           </h3>
+                          <p className="text-xs text-gray-500">
+                            {president ? (
+                              <>
+                                {president.party === 'R' ? 'Republican' : 'Democrat'} • 
+                                {' '}{new Date(president.startDate).getFullYear()} - {new Date(president.endDate).getFullYear()}
+                              </>
+                            ) : 'Unknown term'}
+                          </p>
                         </div>
-                        <p className="mt-1 text-sm text-gray-600 line-clamp-2">
-                          {bill.title || 'No title available'}
-                        </p>
-                        <div className="mt-2 flex items-center space-x-4 text-xs text-gray-500">
-                          <span className="px-2 py-0.5 bg-green-100 text-green-800 rounded">Signed into Law</span>
-                          {bill.latest_action_date && (
-                            <span>Enacted: {formatDate(bill.latest_action_date)}</span>
-                          )}
-                        </div>
-                        {renderVotePreview(bill.id)}
-                      </div>
-                      <div className="ml-4 flex-shrink-0">
-                        <svg
-                          className="h-5 w-5 text-gray-400"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M9 5l7 7-7 7"
-                          />
-                        </svg>
+                        <span className={`ml-auto px-2 py-0.5 text-xs font-medium rounded ${
+                          president?.party === 'R' 
+                            ? 'bg-red-100 text-red-800' 
+                            : president?.party === 'D' 
+                              ? 'bg-blue-100 text-blue-800'
+                              : 'bg-gray-100 text-gray-800'
+                        }`}>
+                          {bills.length} bill{bills.length !== 1 ? 's' : ''}
+                        </span>
                       </div>
                     </div>
-                  </Link>
-                ))}
-              </div>
+                    
+                    {/* Bills under this president */}
+                    <div className="divide-y divide-gray-200">
+                      {bills.map((bill) => (
+                        <Link
+                          key={bill.id}
+                          href={`/bills/${bill.id}`}
+                          className="block px-6 py-4 hover:bg-green-50 transition-colors"
+                        >
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="text-green-600">✓</span>
+                                <h4 className="text-sm font-medium text-gray-900">
+                                  {bill.bill_type.toUpperCase()}. {bill.bill_number}
+                                  {extractShortTitle(bill.title) && (
+                                    <span className="font-normal text-gray-700"> - {extractShortTitle(bill.title)}</span>
+                                  )}
+                                </h4>
+                              </div>
+                              <p className="mt-1 text-xs text-gray-600 line-clamp-1">
+                                {bill.title || 'No title available'}
+                              </p>
+                              <div className="mt-1 flex items-center gap-3 text-xs text-gray-500">
+                                {bill.latest_action_date && (
+                                  <span>Enacted: {formatDate(bill.latest_action_date)}</span>
+                                )}
+                              </div>
+                              {renderVotePreview(bill.id)}
+                            </div>
+                            <div className="ml-3 flex-shrink-0">
+                              <svg className="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                              </svg>
+                            </div>
+                          </div>
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                ));
+              })()
             )}
           </div>
         )}
