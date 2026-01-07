@@ -80,7 +80,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Filter for enacted bills only and extract relevant data\nconst bills = $input.first().json.bills || [];\n\nconst enactedBills = bills.filter(bill => {\n  const latestAction = (bill.latestAction?.text || '').toLowerCase();\n  return latestAction.includes('became public law') || \n         latestAction.includes('became law') ||\n         latestAction.includes('signed by president');\n});\n\n// Map to our ingestion format\nreturn enactedBills.map(bill => {\n  const billType = bill.type?.toLowerCase() || 'hr';\n  const billNumber = bill.number || 0;\n  const congress = bill.congress || 119;\n  \n  return {\n    congress: congress,\n    bill_type: billType,\n    bill_number: parseInt(billNumber)\n  };\n});"
+        "jsCode": "// Filter for enacted bills only and extract relevant data\nconst bills = $input.first().json.bills || [];\n\nconst enactedBills = bills.filter(bill => {\n  const latestAction = (bill.latestAction?.text || '').toLowerCase();\n  return latestAction.includes('became public law') || \n         latestAction.includes('became law') ||\n         latestAction.includes('signed by president');\n});\n\n// If no enacted bills, return empty marker so workflow continues\nif (enactedBills.length === 0) {\n  return [{ json: { no_bills: true } }];\n}\n\n// Map to our ingestion format with proper n8n wrapper\nreturn enactedBills.map(bill => ({\n  json: {\n    congress: bill.congress || 119,\n    bill_type: (bill.type || 'hr').toLowerCase(),\n    bill_number: parseInt(bill.number || 0)\n  }\n}));"
       },
       "name": "Filter Enacted Bills",
       "type": "n8n-nodes-base.code",
@@ -93,13 +93,34 @@
     {
       "parameters": {
         "batchSize": 5,
-        "options": {}
+        "options": {
+          "reset": false
+        }
       },
       "name": "Split In Batches",
       "type": "n8n-nodes-base.splitInBatches",
       "typeVersion": 3,
       "position": [
         1250,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.no_bills !== true}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "name": "Check Has Bills",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1450,
         300
       ]
     },
@@ -113,7 +134,7 @@
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ congress: $json.congress, bill_type: $json.bill_type, bill_number: $json.bill_number }) }}",
         "options": {
-          "timeout": 60000
+          "allowEmptyResponseBody": true
         }
       },
       "name": "Ingest Enacted Bill",
@@ -344,14 +365,7 @@
       "main": [
         [
           {
-            "node": "Ingest Enacted Bill",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Summarize Results",
+            "node": "Check Has Bills",
             "type": "main",
             "index": 0
           }
@@ -502,6 +516,24 @@
         [
           {
             "node": "Generate Congress List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Has Bills": {
+      "main": [
+        [
+          {
+            "node": "Ingest Enacted Bill",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Summarize Results",
             "type": "main",
             "index": 0
           }
