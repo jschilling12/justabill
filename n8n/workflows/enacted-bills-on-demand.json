@@ -34,7 +34,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const response = $input.first().json;\nconst bills = response.bills || [];\n\n// Filter for enacted bills\nconst enacted = bills.filter(bill => {\n  const action = (bill.latestAction?.text || '').toLowerCase();\n  return action.includes('became public law') || \n         action.includes('became law') ||\n         action.includes('signed by president');\n});\n\n// Map to ingest format\nreturn enacted.map(bill => ({\n  json: {\n    congress: bill.congress,\n    bill_type: (bill.type || 'hr').toLowerCase(),\n    bill_number: parseInt(bill.number, 10)\n  }\n}));"
+        "jsCode": "// Process ALL items (all congress sessions)\nconst allItems = $input.all();\nconst allEnacted = [];\n\nfor (const item of allItems) {\n  const bills = item.json.bills || [];\n  \n  // Filter for enacted bills in this congress\n  const enacted = bills.filter(bill => {\n    if (!bill || !bill.latestAction) return false;\n    const action = (bill.latestAction.text || '').toLowerCase();\n    return action.includes('became public law') || \n           action.includes('became law') ||\n           action.includes('signed by president');\n  });\n  \n  // Add to results\n  for (const bill of enacted) {\n    allEnacted.push({\n      json: {\n        congress: bill.congress,\n        bill_type: (bill.type || 'hr').toLowerCase(),\n        bill_number: parseInt(bill.number, 10)\n      }\n    });\n  }\n}\n\n// If no enacted bills found, return empty to skip\nif (allEnacted.length === 0) {\n  return [{ json: {} }];\n}\n\nreturn allEnacted;"
       },
       "name": "Filter Enacted",
       "type": "n8n-nodes-base.code",
