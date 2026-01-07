@@ -21,16 +21,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "http://backend:8000/ingest/bill",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "X-Admin-Key",
-              "value": "={{$env.ADMIN_API_KEY}}"
-            }
-          ]
-        },
+        "url": "http://98.94.94.17/api/ingest/bill",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [

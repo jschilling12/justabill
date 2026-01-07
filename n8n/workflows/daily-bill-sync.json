@@ -72,16 +72,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "http://host.docker.internal:8000/ingest/bill",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "X-Admin-Key",
-              "value": "={{$env.ADMIN_API_KEY}}"
-            }
-          ]
-        },
+        "url": "http://98.94.94.17/api/ingest/bill",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
@@ -122,16 +113,7 @@
     {
       "parameters": {
         "method": "DELETE",
-        "url": "http://host.docker.internal:8000/bills/cleanup",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "X-Admin-Key",
-              "value": "={{$env.ADMIN_API_KEY}}"
-            }
-          ]
-        },
+        "url": "http://98.94.94.17/api/bills/cleanup",
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
