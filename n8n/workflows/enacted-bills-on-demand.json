@@ -12,7 +12,10 @@
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1.1,
-      "position": [250, 300],
+      "position": [
+        250,
+        300
+      ],
       "webhookId": "enacted-bills-on-demand",
       "credentials": {
         "httpHeaderAuth": {
@@ -46,7 +49,10 @@
       "name": "Extract Parameters",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.2,
-      "position": [450, 300]
+      "position": [
+        450,
+        300
+      ]
     },
     {
       "parameters": {
@@ -55,7 +61,10 @@
       "name": "Generate Congress List",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [650, 300]
+      "position": [
+        650,
+        300
+      ]
     },
     {
       "parameters": {
@@ -79,7 +88,10 @@
       "name": "Fetch Bills from Congress.gov",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [850, 300],
+      "position": [
+        850,
+        300
+      ],
       "retryOnFail": true,
       "waitBetweenTries": 5000,
       "maxTries": 3
@@ -91,7 +103,10 @@
       "name": "Filter Enacted Bills",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1050, 300]
+      "position": [
+        1050,
+        300
+      ]
     },
     {
       "parameters": {
@@ -101,7 +116,10 @@
       "name": "Split In Batches",
       "type": "n8n-nodes-base.splitInBatches",
       "typeVersion": 3,
-      "position": [1250, 300]
+      "position": [
+        1250,
+        300
+      ]
     },
     {
       "parameters": {
@@ -119,7 +137,10 @@
       "name": "Ingest Enacted Bill",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [1450, 300],
+      "position": [
+        1450,
+        300
+      ],
       "credentials": {
         "httpHeaderAuth": {
           "id": "admin-api-key",
@@ -139,7 +160,10 @@
       "name": "Wait (Rate Limit)",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
-      "position": [1650, 300]
+      "position": [
+        1650,
+        300
+      ]
     },
     {
       "parameters": {
@@ -148,7 +172,10 @@
       "name": "Summarize Results",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1850, 300]
+      "position": [
+        1850,
+        300
+      ]
     },
     {
       "parameters": {
@@ -176,16 +203,22 @@
       "name": "Fetch Enacted for Popularity",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [2050, 300]
+      "position": [
+        2050,
+        300
+      ]
     },
     {
       "parameters": {
-        "jsCode": "// Get president name and filter bills\nconst presidentName = $('Extract Parameters').first().json.president_name;\nconst allBills = $input.first().json.items || [];\n\n// President date ranges\nconst PRESIDENT_RANGES = {\n  \"Donald Trump 2nd\": { start: \"2025-01-20\", end: \"2029-01-20\" },\n  \"Joe Biden\": { start: \"2021-01-20\", end: \"2025-01-20\" },\n  \"Donald Trump\": { start: \"2017-01-20\", end: \"2021-01-20\" },\n  \"Barack Obama\": { start: \"2009-01-20\", end: \"2017-01-20\" },\n  \"George W. Bush\": { start: \"2001-01-20\", end: \"2009-01-20\" },\n  \"Bill Clinton\": { start: \"1993-01-20\", end: \"2001-01-20\" },\n  \"George H.W. Bush\": { start: \"1989-01-20\", end: \"1993-01-20\" },\n  \"Ronald Reagan\": { start: \"1981-01-20\", end: \"1989-01-20\" },\n};\n\nconst range = PRESIDENT_RANGES[presidentName];\nif (!range) {\n  return [];\n}\n\nconst startDate = new Date(range.start);\nconst endDate = new Date(range.end);\n\n// Filter bills by date range\nconst filteredBills = allBills.filter(bill => {\n  if (!bill.latest_action_date) return false;\n  const actionDate = new Date(bill.latest_action_date);\n  return actionDate >= startDate && actionDate < endDate;\n});\n\n// Limit to top 10 to avoid too many API calls\nreturn filteredBills.slice(0, 10).map(bill => ({\n  bill_id: bill.id,\n  bill_type: bill.bill_type,\n  bill_number: bill.bill_number,\n  title: bill.title,\n  search_query: `${bill.bill_type.toUpperCase()} ${bill.bill_number} law signed`,\n  president_name: presidentName\n}));"
+        "jsCode": "// Get president name and filter bills\nconst presidentName = $('Extract Parameters').first().json.president_name;\nconst allBills = $input.first().json.items || [];\n\n// President date ranges\nconst PRESIDENT_RANGES = {\n  \"Donald Trump 2nd\": { start: \"2025-01-20\", end: \"2029-01-20\" },\n  \"Joe Biden\": { start: \"2021-01-20\", end: \"2025-01-20\" },\n  \"Donald Trump\": { start: \"2017-01-20\", end: \"2021-01-20\" },\n  \"Barack Obama\": { start: \"2009-01-20\", end: \"2017-01-20\" },\n  \"George W. Bush\": { start: \"2001-01-20\", end: \"2009-01-20\" },\n  \"Bill Clinton\": { start: \"1993-01-20\", end: \"2001-01-20\" },\n  \"George H.W. Bush\": { start: \"1989-01-20\", end: \"1993-01-20\" },\n};\n\nconst range = PRESIDENT_RANGES[presidentName];\nif (!range) {\n  return [];\n}\n\nconst startDate = new Date(range.start);\nconst endDate = new Date(range.end);\n\n// Filter bills by date range\nconst filteredBills = allBills.filter(bill => {\n  if (!bill.latest_action_date) return false;\n  const actionDate = new Date(bill.latest_action_date);\n  return actionDate >= startDate && actionDate < endDate;\n});\n\n// Limit to top 10 to avoid too many API calls\nreturn filteredBills.slice(0, 10).map(bill => ({\n  bill_id: bill.id,\n  bill_type: bill.bill_type,\n  bill_number: bill.bill_number,\n  title: bill.title,\n  search_query: `${bill.bill_type.toUpperCase()} ${bill.bill_number} law signed`,\n  president_name: presidentName\n}));"
       },
       "name": "Filter for Popularity Scan",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2250, 300]
+      "position": [
+        2250,
+        300
+      ]
     },
     {
       "parameters": {
@@ -199,7 +232,10 @@
       "name": "Google Search",
       "type": "n8n-nodes-base.google",
       "typeVersion": 1,
-      "position": [2450, 300],
+      "position": [
+        2450,
+        300
+      ],
       "credentials": {
         "googleApi": {
           "id": "google-search-api",
@@ -214,7 +250,10 @@
       "name": "Calculate Popularity",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2650, 300]
+      "position": [
+        2650,
+        300
+      ]
     },
     {
       "parameters": {
@@ -224,7 +263,10 @@
       "name": "Rate Limit (Google)",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
-      "position": [2850, 300]
+      "position": [
+        2850,
+        300
+      ]
     },
     {
       "parameters": {
@@ -233,7 +275,10 @@
       "name": "Aggregate Popularity",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [3050, 300]
+      "position": [
+        3050,
+        300
+      ]
     },
     {
       "parameters": {
@@ -249,7 +294,10 @@
       "name": "Update Popularity Scores",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [3250, 300],
+      "position": [
+        3250,
+        300
+      ],
       "credentials": {
         "httpHeaderAuth": {
           "id": "admin-api-key",
@@ -266,7 +314,10 @@
       "name": "Respond to Webhook",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
-      "position": [3450, 300]
+      "position": [
+        3450,
+        300
+      ]
     }
   ],
   "connections": {

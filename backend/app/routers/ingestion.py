@@ -376,12 +376,6 @@ PRESIDENT_CONGRESS_MAP = {
     "George W. Bush": {"start": 107, "end": 110, "years": "2001-2009"},
     "Bill Clinton": {"start": 103, "end": 106, "years": "1993-2001"},
     "George H.W. Bush": {"start": 101, "end": 102, "years": "1989-1993"},
-    "Ronald Reagan": {"start": 97, "end": 100, "years": "1981-1989"},
-    "Jimmy Carter": {"start": 95, "end": 96, "years": "1977-1981"},
-    "Gerald Ford": {"start": 94, "end": 94, "years": "1974-1977"},
-    "Richard Nixon": {"start": 91, "end": 93, "years": "1969-1974"},
-    "Lyndon B. Johnson": {"start": 89, "end": 90, "years": "1963-1969"},
-    "John F. Kennedy": {"start": 87, "end": 88, "years": "1961-1963"},
 }
 
 
