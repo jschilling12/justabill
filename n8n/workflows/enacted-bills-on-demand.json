@@ -50,7 +50,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Generate array of congress numbers from start to end\nconst start = $input.first().json.start_congress;\nconst end = $input.first().json.end_congress;\nconst presName = $input.first().json.president_name;\n\nconst congresses = [];\nfor (let c = start; c >= end; c--) {\n  congresses.push({ congress: c, president_name: presName });\n}\n\nreturn congresses;"
+        "jsCode": "// Generate array of congress numbers from start to end\nconst start = $input.first().json.start_congress;\nconst end = $input.first().json.end_congress;\nconst presName = $input.first().json.president_name;\n\nconst congresses = [];\n// Iterate from higher congress to lower (or equal)\nconst low = Math.min(start, end);\nconst high = Math.max(start, end);\nfor (let c = high; c >= low; c--) {\n  congresses.push({ congress: c, president_name: presName });\n}\n\nreturn congresses;"
       },
       "name": "Generate Congress List",
       "type": "n8n-nodes-base.code",
