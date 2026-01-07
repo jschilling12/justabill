@@ -161,152 +161,6 @@
         1850,
         300
       ]
-    },
-    {
-      "parameters": {
-        "method": "GET",
-        "url": "http://98.94.94.17/api/bills",
-        "sendQuery": true,
-        "queryParameters": {
-          "parameters": [
-            {
-              "name": "page",
-              "value": "1"
-            },
-            {
-              "name": "page_size",
-              "value": "100"
-            },
-            {
-              "name": "status",
-              "value": "enacted"
-            }
-          ]
-        },
-        "options": {}
-      },
-      "name": "Fetch Enacted for Popularity",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [
-        2050,
-        300
-      ]
-    },
-    {
-      "parameters": {
-        "jsCode": "// Get president name and filter bills\nconst presidentName = $('Extract Parameters').first().json.president_name;\nconst allBills = $input.first().json.items || [];\n\n// President date ranges\nconst PRESIDENT_RANGES = {\n  \"Donald Trump 2nd\": { start: \"2025-01-20\", end: \"2029-01-20\" },\n  \"Joe Biden\": { start: \"2021-01-20\", end: \"2025-01-20\" },\n  \"Donald Trump\": { start: \"2017-01-20\", end: \"2021-01-20\" },\n  \"Barack Obama\": { start: \"2009-01-20\", end: \"2017-01-20\" },\n  \"George W. Bush\": { start: \"2001-01-20\", end: \"2009-01-20\" },\n  \"Bill Clinton\": { start: \"1993-01-20\", end: \"2001-01-20\" },\n  \"George H.W. Bush\": { start: \"1989-01-20\", end: \"1993-01-20\" },\n};\n\nconst range = PRESIDENT_RANGES[presidentName];\nif (!range) {\n  return [];\n}\n\nconst startDate = new Date(range.start);\nconst endDate = new Date(range.end);\n\n// Filter bills by date range\nconst filteredBills = allBills.filter(bill => {\n  if (!bill.latest_action_date) return false;\n  const actionDate = new Date(bill.latest_action_date);\n  return actionDate >= startDate && actionDate < endDate;\n});\n\n// Limit to top 10 to avoid too many API calls\nreturn filteredBills.slice(0, 5).map(bill => ({\n  bill_id: bill.id,\n  bill_type: bill.bill_type,\n  bill_number: bill.bill_number,\n  title: bill.title,\n  search_query: `${bill.bill_type.toUpperCase()} ${bill.bill_number} law signed`,\n  president_name: presidentName\n}));"
-      },
-      "name": "Filter for Popularity Scan",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        2250,
-        300
-      ]
-    },
-    {
-      "parameters": {
-        "url": "=https://www.googleapis.com/customsearch/v1",
-        "sendQuery": true,
-        "queryParameters": {
-          "parameters": [
-            {
-              "name": "key",
-              "value": "={{$env.GOOGLE_API_KEY}}"
-            },
-            {
-              "name": "cx",
-              "value": "={{$env.GOOGLE_SEARCH_ENGINE_ID}}"
-            },
-            {
-              "name": "q",
-              "value": "={{$json.bill_type.toUpperCase()}} {{$json.bill_number}} {{$json.congress}}th Congress"
-            },
-            {
-              "name": "dateRestrict",
-              "value": "m3"
-            },
-            {
-              "name": "sort",
-              "value": "date"
-            }
-          ]
-        },
-        "options": {}
-      },
-      "name": "Search Web for Bill",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 3,
-      "position": [
-        2450,
-        300
-      ],
-      "continueOnFail": true,
-      "id": "search-web-popularity",
-      "notes": "Replace with your preferred search API (Google Custom Search, Bing, NewsAPI, etc.)\nThis example uses Google Custom Search API."
-    },
-    {
-      "parameters": {
-        "jsCode": "// Calculate popularity from search results\nconst searchResults = $input.first().json.searchResult || [];\nconst billData = $input.first().json;\n\nreturn [{\n  json: {\n    bill_id: billData.bill_id,\n    popularity_score: searchResults.length * 10\n  }\n}];"
-      },
-      "name": "Calculate Popularity",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        2650,
-        300
-      ]
-    },
-    {
-      "parameters": {
-        "amount": 3,
-        "unit": "seconds"
-      },
-      "name": "Rate Limit (Google)",
-      "type": "n8n-nodes-base.wait",
-      "typeVersion": 1.1,
-      "position": [
-        2850,
-        300
-      ]
-    },
-    {
-      "parameters": {
-        "jsCode": "// Aggregate all scores\nconst items = $input.all();\n\nconst billUpdates = items.map(item => ({\n  bill_id: item.json.bill_id,\n  popularity_score: item.json.popularity_score\n}));\n\nreturn [{ json: billUpdates }];"
-      },
-      "name": "Aggregate Popularity",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        3050,
-        300
-      ]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "http://98.94.94.17/api/bills/update-popularity",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify($json) }}",
-        "options": {}
-      },
-      "name": "Update Popularity Scores",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [
-        3250,
-        300
-      ],
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "admin-api-key",
-          "name": "Admin API Key"
-        }
-      }
     }
   ],
   "connections": {
@@ -376,24 +230,6 @@
       "main": [
         [
           {
-            "node": "Split In Batches",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Summarize Results": {
-      "main": [
-        [
-          {
-            "node": "Fetch Enacted for Popularity",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
             "node": "Split Presidents",
             "type": "main",
             "index": 0
@@ -401,77 +237,14 @@
         ]
       ]
     },
-    "Fetch Enacted for Popularity": {
-      "main": [
-        [
-          {
-            "node": "Filter for Popularity Scan",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Filter for Popularity Scan": {
-      "main": [
-        [
-          {
-            "node": "Google Search",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+    "Summarize Results": {
+      "main": []
     },
     "Google Search": {
       "main": [
         [
           {
             "node": "Calculate Popularity",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Calculate Popularity": {
-      "main": [
-        [
-          {
-            "node": "Rate Limit (Google)",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Rate Limit (Google)": {
-      "main": [
-        [
-          {
-            "node": "Aggregate Popularity",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Aggregate Popularity": {
-      "main": [
-        [
-          {
-            "node": "Update Popularity Scores",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Update Popularity Scores": {
-      "main": [
-        [
-          {
-            "node": "Respond to Webhook",
             "type": "main",
             "index": 0
           }
