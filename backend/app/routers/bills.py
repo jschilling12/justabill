@@ -23,7 +23,7 @@ router = APIRouter()
 @router.get("", response_model=PaginatedBillsResponse)
 async def list_bills(
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
+    page_size: int = Query(20, ge=1, le=500),
     status: Optional[BillStatus] = None,
     congress: Optional[int] = None,
     popular: Optional[bool] = Query(None, description="If true, only return bills marked as popular"),

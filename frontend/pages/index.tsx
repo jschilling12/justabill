@@ -177,7 +177,7 @@ export default function Home() {
     try {
       setLoadingEnacted(true);
       // Fetch ALL enacted bills (high page size to capture multiple presidents)
-      const data = await getBills(1, 200, undefined, undefined, 'enacted');
+      const data = await getBills(1, 100, undefined, undefined, 'enacted');
       setEnactedBills(data.items);
       const stats = await getBillsVoteStats(data.items.map((b: Bill) => b.id));
       setStatsByBill((prev) => ({ ...prev, ...stats }));

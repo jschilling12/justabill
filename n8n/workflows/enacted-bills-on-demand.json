@@ -107,6 +107,8 @@
       "parameters": {
         "method": "POST",
         "url": "http://98.94.94.17/api/ingest/bill",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ congress: $json.congress, bill_type: $json.bill_type, bill_number: $json.bill_number }) }}",
@@ -118,6 +120,12 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [1450, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "admin-api-key",
+          "name": "Admin API Key"
+        }
+      },
       "continueOnFail": true,
       "retryOnFail": true,
       "waitBetweenTries": 3000,
