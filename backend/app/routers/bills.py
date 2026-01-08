@@ -312,6 +312,48 @@ async def resummarize_bill(
     }
 
 
+@router.post("/resummarize-failed")
+async def resummarize_failed_sections(
+    db: Session = Depends(get_db),
+    _admin: None = Depends(require_admin_key),
+):
+    """Find all sections with failed summaries and queue them for re-summarization"""
+    from app.tasks import summarize_section_task
+    from sqlalchemy import cast, String
+    
+    # Find sections where summary_json contains "Error generating"
+    failed_sections = db.query(BillSection).filter(
+        cast(BillSection.summary_json, String).like('%Error generating%')
+    ).all()
+    
+    # Also find sections with no summary at all
+    null_sections = db.query(BillSection).filter(
+        BillSection.summary_json.is_(None)
+    ).all()
+    
+    all_sections = failed_sections + null_sections
+    
+    if not all_sections:
+        return {
+            "message": "No failed or missing summaries found",
+            "queued": 0
+        }
+    
+    # Queue summarization tasks
+    task_ids = []
+    for section in all_sections:
+        task = summarize_section_task.delay(str(section.id))
+        task_ids.append(task.id)
+    
+    return {
+        "message": f"Queued {len(task_ids)} sections for re-summarization",
+        "queued": len(task_ids),
+        "failed_count": len(failed_sections),
+        "null_count": len(null_sections),
+        "task_ids": task_ids[:10]  # Return first 10 task IDs
+    }
+
+
 @router.delete("/cleanup")
 async def cleanup_old_bills(
     older_than_days: int = Query(60, ge=1, le=365, description="Delete bills not updated in X days"),
