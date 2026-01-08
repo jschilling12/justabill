@@ -723,8 +723,9 @@ export default function Home() {
                             );
                             
                             return [...bills].sort((a, b) => {
-                              const aIsPopular = popularBillIds.has(a.id) || a.is_popular;
-                              const bIsPopular = popularBillIds.has(b.id) || b.is_popular;
+                              // Check if popular via API response, bill flag, or has a score > 0
+                              const aIsPopular = popularBillIds.has(a.id) || a.is_popular || (a.popularity_score && a.popularity_score > 0);
+                              const bIsPopular = popularBillIds.has(b.id) || b.is_popular || (b.popularity_score && b.popularity_score > 0);
                               
                               // Popular bills first
                               if (aIsPopular && !bIsPopular) return -1;
@@ -743,9 +744,9 @@ export default function Home() {
                               return bDate - aDate;
                             });
                           })().map((bill) => {
-                            // Check if this bill is in the top popular for this president
-                            const popularBills = popularByPresident[presName] || [];
-                            const isPopular = popularBills.some(pb => pb.bill_id === bill.id) || bill.is_popular;
+                            // Check if this bill is popular (for showing 🔥)
+                            const popularBillsForPres = popularByPresident[presName] || [];
+                            const isPopular = popularBillsForPres.some(pb => pb.bill_id === bill.id) || bill.is_popular || (bill.popularity_score && bill.popularity_score > 0);
                             return (
                             <Link
                               key={bill.id}
