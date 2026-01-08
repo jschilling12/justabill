@@ -167,10 +167,26 @@ export default function Home() {
   const loadEnactedBills = async () => {
     try {
       setLoadingEnacted(true);
-      // Fetch ALL enacted bills (high page size to capture multiple presidents)
-      const data = await getBills(1, 100, undefined, undefined, 'enacted');
-      setEnactedBills(data.items);
-      const stats = await getBillsVoteStats(data.items.map((b: Bill) => b.id));
+      // Fetch ALL enacted bills by paginating through all pages
+      let allBills: Bill[] = [];
+      let page = 1;
+      const pageSize = 500;
+      let hasMore = true;
+      
+      while (hasMore) {
+        const data = await getBills(page, pageSize, undefined, undefined, 'enacted');
+        allBills = [...allBills, ...data.items];
+        hasMore = page < data.pages;
+        page++;
+        // Safety limit to prevent infinite loops
+        if (page > 20) break;
+      }
+      
+      setEnactedBills(allBills);
+      
+      // Only fetch vote stats for first 100 bills to avoid overload
+      const billsForStats = allBills.slice(0, 100);
+      const stats = await getBillsVoteStats(billsForStats.map((b: Bill) => b.id));
       setStatsByBill((prev) => ({ ...prev, ...stats }));
       
       // Fetch popular bills by president

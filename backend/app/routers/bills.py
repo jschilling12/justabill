@@ -157,6 +157,60 @@ async def update_bill_popularity_by_lookup(
     return bill
 
 
+# NOTE: This route MUST be defined before /{bill_id} routes to avoid being captured by the UUID pattern
+@router.get("/popular-by-president")
+async def get_popular_bills_by_president(
+    top_n: int = Query(2, ge=1, le=10, description="Number of top bills per president"),
+    db: Session = Depends(get_db)
+):
+    """Get the most popular enacted bills for each president based on external popularity scores"""
+    from datetime import datetime
+    
+    # President date ranges for grouping - corrected for Trump 1st vs 2nd term
+    PRESIDENT_RANGES = {
+        "Donald Trump 2nd": ("2025-01-20", "2029-01-20"),
+        "Joe Biden": ("2021-01-20", "2025-01-20"),
+        "Donald Trump": ("2017-01-20", "2021-01-20"),
+        "Barack Obama": ("2009-01-20", "2017-01-20"),
+        "George W. Bush": ("2001-01-20", "2009-01-20"),
+        "Bill Clinton": ("1993-01-20", "2001-01-20"),
+        "George H.W. Bush": ("1989-01-20", "1993-01-20"),
+    }
+    
+    result = {}
+    
+    for president, (start_str, end_str) in PRESIDENT_RANGES.items():
+        start_date = datetime.fromisoformat(start_str.replace('Z', '+00:00'))
+        end_date = datetime.fromisoformat(end_str.replace('Z', '+00:00'))
+        
+        # Get enacted bills in this president's term, ordered by popularity_score
+        popular_bills = (
+            db.query(Bill)
+            .filter(Bill.status == BillStatus.ENACTED)
+            .filter(Bill.latest_action_date >= start_date.date())
+            .filter(Bill.latest_action_date < end_date.date())
+            .filter(Bill.popularity_score > 0)  # Only include bills with external popularity data
+            .order_by(desc(Bill.popularity_score))
+            .limit(top_n)
+            .all()
+        )
+        
+        if popular_bills:
+            result[president] = [
+                {
+                    "bill_id": str(bill.id),
+                    "bill_type": bill.bill_type,
+                    "bill_number": bill.bill_number,
+                    "title": bill.title,
+                    "popularity_score": bill.popularity_score,
+                    "latest_action_date": bill.latest_action_date.isoformat() if bill.latest_action_date else None,
+                }
+                for bill in popular_bills
+            ]
+    
+    return result
+
+
 @router.get("/{bill_id}", response_model=BillWithSections)
 async def get_bill(bill_id: UUID, db: Session = Depends(get_db)):
     """Get a bill by ID with all its sections"""
@@ -293,58 +347,6 @@ async def cleanup_old_bills(
         "cutoff_date": cutoff_date.isoformat(),
         "older_than_days": older_than_days
     }
-
-
-@router.get("/popular-by-president")
-async def get_popular_bills_by_president(
-    top_n: int = Query(2, ge=1, le=10, description="Number of top bills per president"),
-    db: Session = Depends(get_db)
-):
-    """Get the most popular enacted bills for each president based on external popularity scores"""
-    from datetime import datetime
-    
-    # President date ranges for grouping
-    PRESIDENT_RANGES = {
-        "Donald Trump 2nd": ("2017-01-20", "2029-01-20"),
-        "Joe Biden": ("2021-01-20", "2025-01-20"),
-        "Barack Obama": ("2009-01-20", "2017-01-20"),
-        "George W. Bush": ("2001-01-20", "2009-01-20"),
-        "Bill Clinton": ("1993-01-20", "2001-01-20"),
-        "George H.W. Bush": ("1989-01-20", "1993-01-20"),
-    }
-    
-    result = {}
-    
-    for president, (start_str, end_str) in PRESIDENT_RANGES.items():
-        start_date = datetime.fromisoformat(start_str.replace('Z', '+00:00'))
-        end_date = datetime.fromisoformat(end_str.replace('Z', '+00:00'))
-        
-        # Get enacted bills in this president's term, ordered by popularity_score
-        popular_bills = (
-            db.query(Bill)
-            .filter(Bill.status == BillStatus.ENACTED)
-            .filter(Bill.latest_action_date >= start_date.date())
-            .filter(Bill.latest_action_date < end_date.date())
-            .filter(Bill.popularity_score > 0)  # Only include bills with external popularity data
-            .order_by(desc(Bill.popularity_score))
-            .limit(top_n)
-            .all()
-        )
-        
-        if popular_bills:
-            result[president] = [
-                {
-                    "bill_id": str(bill.id),
-                    "bill_type": bill.bill_type,
-                    "bill_number": bill.bill_number,
-                    "title": bill.title,
-                    "popularity_score": bill.popularity_score,
-                    "latest_action_date": bill.latest_action_date.isoformat() if bill.latest_action_date else None,
-                }
-                for bill in popular_bills
-            ]
-    
-    return result
 
 
 @router.post("/update-popularity")
