@@ -11,7 +11,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Generate list of all presidents with their congress sessions\nconst presidents = [\n  { name: \"Donald Trump 2nd\", congresses: [115, 116, 119] },\n  { name: \"Joe Biden\", congresses: [117, 118] },\n  { name: \"Barack Obama\", congresses: [111, 112, 113, 114] },\n  { name: \"George W. Bush\", congresses: [107, 108, 109, 110] },\n  { name: \"Bill Clinton\", congresses: [103, 104, 105, 106] },\n  { name: \"George H.W. Bush\", congresses: [101, 102] }\n];\n\n// Flatten to one item per congress session\nconst items = [];\nfor (const pres of presidents) {\n  for (const congress of pres.congresses) {\n    items.push({\n      json: {\n        president: pres.name,\n        congress: congress\n      }\n    });\n  }\n}\n\nreturn items;"
+        "jsCode": "// Generate list of all presidents with their congress sessions\n// CORRECTED congress mappings:\n// - Trump 1st term: 115-116 (2017-2021)\n// - Biden: 117-118 (2021-2025)\n// - Trump 2nd term: 119 (2025-2029)\n// - Obama: 111-114 (2009-2017)\n// - Bush: 107-110 (2001-2009)\n// - Clinton: 103-106 (1993-2001)\n// - H.W. Bush: 101-102 (1989-1993)\nconst presidents = [\n  { name: \"Donald Trump 2nd\", congresses: [119] },\n  { name: \"Joe Biden\", congresses: [117, 118] },\n  { name: \"Donald Trump\", congresses: [115, 116] },\n  { name: \"Barack Obama\", congresses: [111, 112, 113, 114] },\n  { name: \"George W. Bush\", congresses: [107, 108, 109, 110] },\n  { name: \"Bill Clinton\", congresses: [103, 104, 105, 106] },\n  { name: \"George H.W. Bush\", congresses: [101, 102] }\n];\n\n// Flatten to one item per congress session\nconst items = [];\nfor (const pres of presidents) {\n  for (const congress of pres.congresses) {\n    items.push({\n      json: {\n        president: pres.name,\n        congress: congress\n      }\n    });\n  }\n}\n\nreturn items;"
       },
       "name": "Generate Congress Sessions",
       "type": "n8n-nodes-base.code",
@@ -22,25 +22,25 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "=https://api.congress.gov/v3/bill/{{ $json.congress }}?limit=250&sort=updateDate+desc&api_key={{ $env.CONGRESS_API_KEY }}",
+        "url": "=https://api.congress.gov/v3/law/{{ $json.congress }}?limit=250&api_key={{ $env.CONGRESS_API_KEY }}",
         "options": {}
       },
-      "name": "Fetch Bills",
+      "name": "Fetch Laws",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [650, 300],
-      "id": "fetch-bills",
+      "id": "fetch-laws",
       "continueOnFail": true
     },
     {
       "parameters": {
-        "jsCode": "// Process ALL items (all congress sessions)\nconst allItems = $input.all();\nconst allEnacted = [];\n\nfor (const item of allItems) {\n  const bills = item.json.bills || [];\n  \n  // Filter for enacted bills in this congress\n  const enacted = bills.filter(bill => {\n    if (!bill || !bill.latestAction) return false;\n    const action = (bill.latestAction.text || '').toLowerCase();\n    return action.includes('became public law') || \n           action.includes('became law') ||\n           action.includes('signed by president');\n  });\n  \n  // Add to results\n  for (const bill of enacted) {\n    allEnacted.push({\n      json: {\n        congress: bill.congress,\n        bill_type: (bill.type || 'hr').toLowerCase(),\n        bill_number: parseInt(bill.number, 10)\n      }\n    });\n  }\n}\n\n// If no enacted bills found, return empty to skip\nif (allEnacted.length === 0) {\n  return [{ json: {} }];\n}\n\nreturn allEnacted;"
+        "jsCode": "// Process ALL items (all congress sessions) from the /law endpoint\n// The /law endpoint returns 'bills' array with enacted laws\nconst allItems = $input.all();\nconst allEnacted = [];\n\nfor (const item of allItems) {\n  // The /law endpoint returns 'bills' array (bills that became law)\n  const bills = item.json.bills || [];\n  \n  for (const bill of bills) {\n    // Each bill has type (S, HR, etc.) and number\n    if (bill.type && bill.number) {\n      allEnacted.push({\n        json: {\n          congress: bill.congress,\n          bill_type: bill.type.toLowerCase(),\n          bill_number: parseInt(bill.number, 10)\n        }\n      });\n    }\n  }\n}\n\n// If no enacted bills found, return empty to skip\nif (allEnacted.length === 0) {\n  return [{ json: { _empty: true } }];\n}\n\nreturn allEnacted;"
       },
-      "name": "Filter Enacted",
+      "name": "Extract Laws",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [850, 300],
-      "id": "filter-enacted",
+      "id": "extract-laws",
       "alwaysOutputData": true
     },
     {
@@ -112,12 +112,12 @@
       "main": [[{"node": "Generate Congress Sessions", "type": "main", "index": 0}]]
     },
     "Generate Congress Sessions": {
-      "main": [[{"node": "Fetch Bills", "type": "main", "index": 0}]]
+      "main": [[{"node": "Fetch Laws", "type": "main", "index": 0}]]
     },
-    "Fetch Bills": {
-      "main": [[{"node": "Filter Enacted", "type": "main", "index": 0}]]
+    "Fetch Laws": {
+      "main": [[{"node": "Extract Laws", "type": "main", "index": 0}]]
     },
-    "Filter Enacted": {
+    "Extract Laws": {
       "main": [[{"node": "Batch Bills", "type": "main", "index": 0}]]
     },
     "Batch Bills": {

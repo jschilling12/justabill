@@ -648,15 +648,14 @@ export default function Home() {
                 
                 // Create list of all presidents to show
                 const allPresidents = Object.entries(PRESIDENT_CONGRESS_MAP).map(([name, range]) => {
-                  const party = PRESIDENTS.find(p => p.name === name || 
-                    (name === 'Donald Trump 2nd' && p.name === 'Donald Trump' && p.startDate === '2025-01-20') ||
-                    (name === 'Donald Trump' && p.name === 'Donald Trump' && p.startDate === '2017-01-20')
-                  )?.party || 'R';
+                  // Direct match by name - PRESIDENTS array now has proper 'Donald Trump' and 'Donald Trump 2nd' entries
+                  const party = PRESIDENTS.find(p => p.name === name)?.party || 'R';
                   return { name, ...range, party };
                 });
                 
                 return allPresidents.map(({ name: presName, start, end, years, party }) => {
-                  const bills = billsByPresident.get(presName.replace(' 2nd', '')) || [];
+                  // Get bills for this president - use exact name match since we now have separate 'Donald Trump' and 'Donald Trump 2nd'
+                  const bills = billsByPresident.get(presName) || [];
                   const isFetching = fetchingPresident === presName;
                   const hasFetched = fetchedPresidents.has(presName);
                   const displayName = presName.replace(' 2nd', '');
