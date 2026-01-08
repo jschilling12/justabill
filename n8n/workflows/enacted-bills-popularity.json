@@ -31,16 +31,6 @@
     },
     {
       "parameters": {
-        "jsCode": "// Generate list of presidents with their congress sessions\nconst presidents = [\n  { name: \"Donald Trump 2nd\", congresses: [119] },\n  { name: \"Joe Biden\", congresses: [117, 118] },\n  { name: \"Donald Trump\", congresses: [115, 116] },\n  { name: \"Barack Obama\", congresses: [111, 112, 113, 114] },\n  { name: \"George W. Bush\", congresses: [107, 108, 109, 110] },\n  { name: \"Bill Clinton\", congresses: [103, 104, 105, 106] },\n  { name: \"George H.W. Bush\", congresses: [101, 102] }\n];\n\nreturn presidents.map(p => ({ json: p }));"
-      },
-      "name": "Generate Presidents",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [450, 400],
-      "id": "generate-presidents"
-    },
-    {
-      "parameters": {
         "method": "GET",
         "url": "http://98.94.94.17/api/bills",
         "sendQuery": true,
@@ -52,7 +42,7 @@
             },
             {
               "name": "page_size",
-              "value": "100"
+              "value": "500"
             }
           ]
         },
@@ -61,18 +51,18 @@
       "name": "Fetch Enacted Bills",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [650, 400],
+      "position": [450, 400],
       "id": "fetch-enacted-bills"
     },
     {
       "parameters": {
-        "jsCode": "// Extract enacted bills and filter by president's congresses\nconst items = $input.all();\nconst allBills = [];\n\nfor (const item of items) {\n  const president = item.json.name;\n  const congresses = item.json.congresses;\n  const response = item.json;\n  const bills = response.items || [];\n  \n  // Filter bills for this president's congresses\n  const presidentBills = bills.filter(b => congresses.includes(b.congress));\n  \n  // Return each bill with president info attached\n  for (const bill of presidentBills) {\n    allBills.push({\n      json: {\n        president: president,\n        bill_id: bill.id,\n        congress: bill.congress,\n        bill_type: bill.bill_type,\n        bill_number: bill.bill_number,\n        title: bill.title,\n        short_title: bill.short_title || bill.title?.substring(0, 60)\n      }\n    });\n  }\n}\n\nif (allBills.length === 0) {\n  return [{ json: { _empty: true } }];\n}\n\nreturn allBills;"
+        "jsCode": "// Extract enacted bills and assign president based on congress number\nconst items = $input.all();\nconst allBills = [];\n\n// President to Congress mapping\nconst PRESIDENT_CONGRESS = {\n  119: 'Donald Trump 2nd',\n  118: 'Joe Biden',\n  117: 'Joe Biden',\n  116: 'Donald Trump',\n  115: 'Donald Trump',\n  114: 'Barack Obama',\n  113: 'Barack Obama',\n  112: 'Barack Obama',\n  111: 'Barack Obama',\n  110: 'George W. Bush',\n  109: 'George W. Bush',\n  108: 'George W. Bush',\n  107: 'George W. Bush',\n  106: 'Bill Clinton',\n  105: 'Bill Clinton',\n  104: 'Bill Clinton',\n  103: 'Bill Clinton',\n  102: 'George H.W. Bush',\n  101: 'George H.W. Bush',\n};\n\nfor (const item of items) {\n  const bills = item.json.items || [];\n  \n  for (const bill of bills) {\n    const president = PRESIDENT_CONGRESS[bill.congress] || 'Unknown';\n    \n    allBills.push({\n      json: {\n        president: president,\n        bill_id: bill.id,\n        congress: bill.congress,\n        bill_type: bill.bill_type,\n        bill_number: bill.bill_number,\n        title: bill.title,\n        short_title: bill.short_title || (bill.title ? bill.title.substring(0, 60) : '')\n      }\n    });\n  }\n}\n\nif (allBills.length === 0) {\n  return [{ json: { _empty: true } }];\n}\n\nreturn allBills;"
       },
-      "name": "Extract Bills by President",
+      "name": "Extract Bills",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [850, 400],
-      "id": "extract-president-bills"
+      "position": [650, 400],
+      "id": "extract-bills"
     },
     {
       "parameters": {
@@ -82,7 +72,7 @@
       "name": "Batch Bills",
       "type": "n8n-nodes-base.splitInBatches",
       "typeVersion": 3,
-      "position": [1050, 400],
+      "position": [850, 400],
       "id": "batch-popularity"
     },
     {
@@ -99,7 +89,7 @@
       "name": "Has Bill Data",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
-      "position": [1250, 400],
+      "position": [1050, 400],
       "id": "has-bill-data"
     },
     {
@@ -131,19 +121,19 @@
       "name": "Google Search",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [1450, 400],
+      "position": [1250, 400],
       "id": "google-search-enacted",
       "continueOnFail": true,
       "notes": "Search for news/mentions of this enacted law"
     },
     {
       "parameters": {
-        "jsCode": "// Calculate popularity score from search results\nconst items = $input.all();\nconst results = [];\n\nfor (const item of items) {\n  const searchResult = item.json;\n  const billId = item.json.bill_id || searchResult?.queries?.request?.[0]?.searchTerms;\n  \n  let popularityScore = 0;\n  \n  if (searchResult && !searchResult.error && searchResult.items) {\n    const searchItems = searchResult.items || [];\n    \n    for (const si of searchItems) {\n      let score = 1;\n      const domain = (si.displayLink || '').toLowerCase();\n      \n      // High-quality news sources\n      if (domain.includes('nytimes') || domain.includes('washingtonpost') || \n          domain.includes('wsj') || domain.includes('reuters') || domain.includes('apnews')) {\n        score += 8;\n      } else if (domain.includes('cnn') || domain.includes('foxnews') || \n                 domain.includes('nbcnews') || domain.includes('abcnews') ||\n                 domain.includes('politico') || domain.includes('thehill')) {\n        score += 6;\n      } else if (domain.includes('news') || domain.includes('bbc')) {\n        score += 4;\n      } else if (domain.includes('.gov')) {\n        score += 3;\n      }\n      \n      popularityScore += score;\n    }\n  }\n  \n  // Pass through bill info + popularity score\n  results.push({\n    json: {\n      bill_id: item.json.bill_id,\n      congress: item.json.congress,\n      bill_type: item.json.bill_type,\n      bill_number: item.json.bill_number,\n      president: item.json.president,\n      popularity_score: Math.round(popularityScore)\n    }\n  });\n}\n\nreturn results;"
+        "jsCode": "// Calculate popularity score from search results\n// The input item has both the search result AND the original bill data\nconst item = $input.item;\nconst searchResult = item.json;\n\n// Get bill data from the paired item (previous node's input)\nconst billData = $('Has Bill Data').item.json;\n\nlet popularityScore = 0;\n\nif (searchResult && !searchResult.error && searchResult.items) {\n  const searchItems = searchResult.items || [];\n  \n  for (const si of searchItems) {\n    let score = 1;\n    const domain = (si.displayLink || '').toLowerCase();\n    \n    // High-quality news sources\n    if (domain.includes('nytimes') || domain.includes('washingtonpost') || \n        domain.includes('wsj') || domain.includes('reuters') || domain.includes('apnews')) {\n      score += 8;\n    } else if (domain.includes('cnn') || domain.includes('foxnews') || \n               domain.includes('nbcnews') || domain.includes('abcnews') ||\n               domain.includes('politico') || domain.includes('thehill')) {\n      score += 6;\n    } else if (domain.includes('news') || domain.includes('bbc')) {\n      score += 4;\n    } else if (domain.includes('.gov')) {\n      score += 3;\n    }\n    \n    popularityScore += score;\n  }\n}\n\nreturn {\n  json: {\n    bill_id: billData.bill_id,\n    congress: billData.congress,\n    bill_type: billData.bill_type,\n    bill_number: billData.bill_number,\n    president: billData.president,\n    popularity_score: Math.round(popularityScore)\n  }\n};"
       },
       "name": "Calculate Popularity",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1650, 400],
+      "position": [1450, 400],
       "id": "calculate-enacted-popularity"
     },
     {
@@ -160,7 +150,7 @@
       "name": "Update Popularity",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [1850, 400],
+      "position": [1650, 400],
       "id": "update-enacted-popularity",
       "credentials": {
         "httpHeaderAuth": {
@@ -178,24 +168,21 @@
       "name": "Rate Limit Wait",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
-      "position": [2050, 400],
+      "position": [1850, 400],
       "id": "wait-popularity"
     }
   ],
   "connections": {
     "Weekly Schedule": {
-      "main": [[{"node": "Generate Presidents", "type": "main", "index": 0}]]
+      "main": [[{"node": "Fetch Enacted Bills", "type": "main", "index": 0}]]
     },
     "Manual Trigger": {
-      "main": [[{"node": "Generate Presidents", "type": "main", "index": 0}]]
-    },
-    "Generate Presidents": {
       "main": [[{"node": "Fetch Enacted Bills", "type": "main", "index": 0}]]
     },
     "Fetch Enacted Bills": {
-      "main": [[{"node": "Extract Bills by President", "type": "main", "index": 0}]]
+      "main": [[{"node": "Extract Bills", "type": "main", "index": 0}]]
     },
-    "Extract Bills by President": {
+    "Extract Bills": {
       "main": [[{"node": "Batch Bills", "type": "main", "index": 0}]]
     },
     "Batch Bills": {
