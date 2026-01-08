@@ -271,12 +271,14 @@ export async function getBills(
   pageSize: number = 20,
   popular?: boolean,
   lawImpactOnly?: boolean,
-  status?: BillStatus
+  status?: BillStatus,
+  excludeStatus?: BillStatus
 ) {
   const params: Record<string, any> = { page, page_size: pageSize };
   if (popular) params.popular = true;
   if (lawImpactOnly) params.law_impact_only = true;
   if (status) params.status = status;
+  if (excludeStatus) params.exclude_status = excludeStatus;
 
   const response = await api.get('/bills', { params });
   return response.data;

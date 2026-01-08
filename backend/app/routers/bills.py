@@ -25,6 +25,10 @@ async def list_bills(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=500),
     status: Optional[BillStatus] = None,
+    exclude_status: Optional[BillStatus] = Query(
+        None,
+        description="Exclude bills with this status (e.g., 'enacted' to exclude signed laws)",
+    ),
     congress: Optional[int] = None,
     popular: Optional[bool] = Query(None, description="If true, only return bills marked as popular"),
     law_impact_only: Optional[bool] = Query(
@@ -40,6 +44,8 @@ async def list_bills(
     # Apply filters
     if status:
         query = query.filter(Bill.status == status)
+    if exclude_status:
+        query = query.filter(Bill.status != exclude_status)
     if congress:
         query = query.filter(Bill.congress == congress)
     if popular is True:

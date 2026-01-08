@@ -118,7 +118,10 @@ export default function Home() {
   const loadBills = async () => {
     try {
       setLoading(true);
-      const data = await getBills(page, 20, undefined, undefined, statusFilter || undefined);
+      // Exclude enacted bills from the voting tab (they belong in Signed into Law tab)
+      // If user explicitly filters by a status, don't exclude enacted
+      const excludeEnacted = statusFilter ? undefined : 'enacted';
+      const data = await getBills(page, 20, undefined, undefined, statusFilter || undefined, excludeEnacted as any);
       setBills(data.items);
       setTotalPages(data.pages);
       const stats = await getBillsVoteStats(data.items.map((b: Bill) => b.id));
@@ -134,7 +137,8 @@ export default function Home() {
     try {
       setLoadingLawImpact(true);
       // First page of likely law-impact bills (e.g., HR/S in latest Congress)
-      const data = await getBills(1, 7, undefined, true);
+      // Exclude enacted bills - they belong in Signed into Law tab
+      const data = await getBills(1, 7, undefined, true, undefined, 'enacted');
       setLawImpactBills(data.items);
       const stats = await getBillsVoteStats(data.items.map((b: Bill) => b.id));
       setStatsByBill((prev) => ({ ...prev, ...stats }));
@@ -149,11 +153,9 @@ export default function Home() {
     try {
       setLoadingPopular(true);
       // Fetch top 3 popular bills (exclude enacted since those aren't for voting)
-      const data = await getBills(1, 3, true);
-      // Filter out enacted bills from popular
-      const activeBills = data.items.filter((b: Bill) => b.status !== 'enacted').slice(0, 3);
-      setPopularBills(activeBills);
-      const stats = await getBillsVoteStats(activeBills.map((b: Bill) => b.id));
+      const data = await getBills(1, 3, true, undefined, undefined, 'enacted');
+      setPopularBills(data.items);
+      const stats = await getBillsVoteStats(data.items.map((b: Bill) => b.id));
       setStatsByBill((prev) => ({ ...prev, ...stats }));
     } catch (error) {
       console.error('Error loading popular bills:', error);
