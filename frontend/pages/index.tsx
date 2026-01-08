@@ -91,29 +91,20 @@ export default function Home() {
     loadEnactedBills();
   }, []);
 
-  // Auto-fetch all presidents when enacted tab is loaded (only once)
+  // NOTE: Auto-fetch removed - bills should be loaded by admin via n8n workflow
+  // This effect is now disabled to prevent regular users from triggering data ingestion
+  /*
   useEffect(() => {
     if (activeTab === 'enacted' && !loadingEnacted) {
       const presidentNames = Object.keys(PRESIDENT_CONGRESS_MAP);
-      
-      // Only auto-fetch presidents that haven't been fetched yet
       const unfetchedPresidents = presidentNames.filter(name => !fetchedPresidents.has(name));
       
       if (unfetchedPresidents.length > 0) {
-        console.log(`Auto-fetching ${unfetchedPresidents.length} presidents:`, unfetchedPresidents);
-        
-        // Fetch presidents sequentially with a delay to avoid overwhelming the API
-        let delay = 0;
-        unfetchedPresidents.forEach((presidentName, index) => {
-          setTimeout(() => {
-            console.log(`Auto-fetching president ${index + 1}/${unfetchedPresidents.length}: ${presidentName}`);
-            handleFetchPresidentBills(presidentName);
-          }, delay);
-          delay += 2000; // 2 second delay between each president fetch
-        });
+        // Auto-fetch disabled - admin should use n8n workflow
       }
     }
   }, [activeTab, loadingEnacted, fetchedPresidents]);
+  */
 
   const loadBills = async () => {
     try {
@@ -608,39 +599,8 @@ export default function Home() {
             <div className="bg-white rounded-lg shadow px-6 py-4">
               <h2 className="text-xl font-semibold text-gray-900">✅ Signed into Law</h2>
               <p className="text-sm text-gray-500 mt-1">
-                Bills grouped by president. Data is automatically loaded on first visit.
+                Bills grouped by the president who signed them into law.
               </p>
-              
-              {/* Auto-fetch progress indicator */}
-              {(() => {
-                const totalPresidents = Object.keys(PRESIDENT_CONGRESS_MAP).length;
-                const fetchedCount = fetchedPresidents.size;
-                const progress = (fetchedCount / totalPresidents) * 100;
-                
-                if (fetchedCount < totalPresidents && fetchedCount > 0) {
-                  return (
-                    <div className="mt-3 bg-blue-50 px-3 py-2 rounded">
-                      <div className="flex items-center justify-between text-sm mb-1">
-                        <span className="text-blue-700 font-medium">Loading presidents...</span>
-                        <span className="text-blue-600">{fetchedCount}/{totalPresidents}</span>
-                      </div>
-                      <div className="w-full bg-blue-200 rounded-full h-1.5">
-                        <div 
-                          className="bg-blue-600 h-1.5 rounded-full transition-all duration-300"
-                          style={{ width: `${progress}%` }}
-                        ></div>
-                      </div>
-                    </div>
-                  );
-                }
-                return null;
-              })()}
-              
-              {fetchError && (
-                <div className="mt-2 text-sm text-red-600 bg-red-50 px-3 py-2 rounded">
-                  {fetchError}
-                </div>
-              )}
             </div>
             
             {loadingEnacted ? (
@@ -688,11 +648,9 @@ export default function Home() {
                         onClick={() => {
                           if (hasBills) {
                             togglePresidentCollapse(presName);
-                          } else if (!hasFetched) {
-                            handleFetchPresidentBills(presName);
                           }
                         }}
-                        disabled={isFetching || (!hasBills && hasFetched)}
+                        disabled={!hasBills}
                         className={`w-full px-6 py-3 border-b text-left transition-colors ${
                           party === 'R' 
                             ? 'bg-red-50 border-red-200 hover:bg-red-100' 
@@ -720,12 +678,7 @@ export default function Home() {
                             </p>
                           </div>
                           
-                          {isFetching ? (
-                            <div className="flex items-center gap-2">
-                              <div className="animate-spin h-4 w-4 border-2 border-gray-400 border-t-transparent rounded-full"></div>
-                              <span className="text-xs text-gray-500">Fetching...</span>
-                            </div>
-                          ) : hasBills ? (
+                          {hasBills ? (
                             <span className={`px-2 py-0.5 text-xs font-medium rounded ${
                               party === 'R' 
                                 ? 'bg-red-100 text-red-800' 
@@ -736,21 +689,14 @@ export default function Home() {
                                 {isCollapsed ? '(click to expand)' : '(click to collapse)'}
                               </span>
                             </span>
-                          ) : hasFetched ? (
-                            <span className="text-xs text-gray-400">✓ Checked</span>
                           ) : (
-                            <span className="text-xs text-gray-400 flex items-center gap-1">
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                              </svg>
-                              Click to load
-                            </span>
+                            <span className="text-xs text-gray-400">No bills loaded</span>
                           )}
                         </div>
                       </button>
                       
-                      {/* No bills message with refresh for fetched presidents */}
-                      {hasFetched && bills.length === 0 && (
+                      {/* No bills message */}
+                      {bills.length === 0 && (
                         <div className="px-6 py-4 text-center bg-gray-50">
                           {isCurrentTerm ? (
                             <>
@@ -760,12 +706,7 @@ export default function Home() {
                               </p>
                             </>
                           ) : (
-                            <>
-                              <p className="text-sm text-gray-600">📋 No enacted laws found in database</p>
-                              <p className="text-xs text-gray-400 mt-1">
-                                Bills may still be processing or none matched the criteria
-                              </p>
-                            </>
+                            <p className="text-sm text-gray-500">No bills loaded for this president</p>
                           )}
                         </div>
                       )}
