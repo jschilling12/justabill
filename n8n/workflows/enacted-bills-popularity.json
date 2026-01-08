@@ -42,7 +42,7 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "http://backend:8000/bills",
+        "url": "http://98.94.94.17/api/bills",
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
@@ -149,7 +149,7 @@
     {
       "parameters": {
         "method": "PATCH",
-        "url": "=http://backend:8000/bills/lookup/{{ $json.congress }}/{{ $json.bill_type }}/{{ $json.bill_number }}/popularity",
+        "url": "=http://98.94.94.17/api/bills/lookup/{{ $json.congress }}/{{ $json.bill_type }}/{{ $json.bill_number }}/popularity",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
