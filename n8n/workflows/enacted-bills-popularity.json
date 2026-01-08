@@ -1,0 +1,229 @@
+{
+  "name": "Enacted Bills Popularity Check",
+  "active": false,
+  "versionId": "1",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 6 * * 0"
+            }
+          ]
+        }
+      },
+      "name": "Weekly Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "id": "schedule-enacted-popularity",
+      "notes": "Runs weekly on Sunday at 6 AM - checks popularity of enacted bills"
+    },
+    {
+      "parameters": {},
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [250, 500],
+      "id": "manual-trigger-enacted"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generate list of presidents with their congress sessions\nconst presidents = [\n  { name: \"Donald Trump 2nd\", congresses: [119] },\n  { name: \"Joe Biden\", congresses: [117, 118] },\n  { name: \"Donald Trump\", congresses: [115, 116] },\n  { name: \"Barack Obama\", congresses: [111, 112, 113, 114] },\n  { name: \"George W. Bush\", congresses: [107, 108, 109, 110] },\n  { name: \"Bill Clinton\", congresses: [103, 104, 105, 106] },\n  { name: \"George H.W. Bush\", congresses: [101, 102] }\n];\n\nreturn presidents.map(p => ({ json: p }));"
+      },
+      "name": "Generate Presidents",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 400],
+      "id": "generate-presidents"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://backend:8000/bills",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "status",
+              "value": "enacted"
+            },
+            {
+              "name": "page_size",
+              "value": "100"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Fetch Enacted Bills",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [650, 400],
+      "id": "fetch-enacted-bills"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract enacted bills and filter by president's congresses\nconst items = $input.all();\nconst allBills = [];\n\nfor (const item of items) {\n  const president = item.json.name;\n  const congresses = item.json.congresses;\n  const response = item.json;\n  const bills = response.items || [];\n  \n  // Filter bills for this president's congresses\n  const presidentBills = bills.filter(b => congresses.includes(b.congress));\n  \n  // Return each bill with president info attached\n  for (const bill of presidentBills) {\n    allBills.push({\n      json: {\n        president: president,\n        bill_id: bill.id,\n        congress: bill.congress,\n        bill_type: bill.bill_type,\n        bill_number: bill.bill_number,\n        title: bill.title,\n        short_title: bill.short_title || bill.title?.substring(0, 60)\n      }\n    });\n  }\n}\n\nif (allBills.length === 0) {\n  return [{ json: { _empty: true } }];\n}\n\nreturn allBills;"
+      },
+      "name": "Extract Bills by President",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [850, 400],
+      "id": "extract-president-bills"
+    },
+    {
+      "parameters": {
+        "batchSize": 5,
+        "options": {}
+      },
+      "name": "Batch Bills",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [1050, 400],
+      "id": "batch-popularity"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.bill_id }}",
+              "operation": "isNotEmpty"
+            }
+          ]
+        }
+      },
+      "name": "Has Bill Data",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1250, 400],
+      "id": "has-bill-data"
+    },
+    {
+      "parameters": {
+        "url": "https://www.googleapis.com/customsearch/v1",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "key",
+              "value": "={{ $env.GOOGLE_API_KEY }}"
+            },
+            {
+              "name": "cx",
+              "value": "={{ $env.GOOGLE_SEARCH_ENGINE_ID }}"
+            },
+            {
+              "name": "q",
+              "value": "=\"{{ $json.bill_type.toUpperCase() }} {{ $json.bill_number }}\" OR \"{{ $json.short_title }}\" congress law"
+            },
+            {
+              "name": "num",
+              "value": "10"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Google Search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1450, 400],
+      "id": "google-search-enacted",
+      "continueOnFail": true,
+      "notes": "Search for news/mentions of this enacted law"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Calculate popularity score from search results\nconst items = $input.all();\nconst results = [];\n\nfor (const item of items) {\n  const searchResult = item.json;\n  const billId = item.json.bill_id || searchResult?.queries?.request?.[0]?.searchTerms;\n  \n  let popularityScore = 0;\n  \n  if (searchResult && !searchResult.error && searchResult.items) {\n    const searchItems = searchResult.items || [];\n    \n    for (const si of searchItems) {\n      let score = 1;\n      const domain = (si.displayLink || '').toLowerCase();\n      \n      // High-quality news sources\n      if (domain.includes('nytimes') || domain.includes('washingtonpost') || \n          domain.includes('wsj') || domain.includes('reuters') || domain.includes('apnews')) {\n        score += 8;\n      } else if (domain.includes('cnn') || domain.includes('foxnews') || \n                 domain.includes('nbcnews') || domain.includes('abcnews') ||\n                 domain.includes('politico') || domain.includes('thehill')) {\n        score += 6;\n      } else if (domain.includes('news') || domain.includes('bbc')) {\n        score += 4;\n      } else if (domain.includes('.gov')) {\n        score += 3;\n      }\n      \n      popularityScore += score;\n    }\n  }\n  \n  // Pass through bill info + popularity score\n  results.push({\n    json: {\n      bill_id: item.json.bill_id,\n      congress: item.json.congress,\n      bill_type: item.json.bill_type,\n      bill_number: item.json.bill_number,\n      president: item.json.president,\n      popularity_score: Math.round(popularityScore)\n    }\n  });\n}\n\nreturn results;"
+      },
+      "name": "Calculate Popularity",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1650, 400],
+      "id": "calculate-enacted-popularity"
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=http://backend:8000/bills/lookup/{{ $json.congress }}/{{ $json.bill_type }}/{{ $json.bill_number }}/popularity",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"is_popular\": {{ $json.popularity_score >= 15 }},\n  \"popularity_score\": {{ $json.popularity_score }}\n}",
+        "options": {}
+      },
+      "name": "Update Popularity",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1850, 400],
+      "id": "update-enacted-popularity",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "admin-api-key",
+          "name": "Admin API Key"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "amount": 1,
+        "unit": "seconds"
+      },
+      "name": "Rate Limit Wait",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [2050, 400],
+      "id": "wait-popularity"
+    }
+  ],
+  "connections": {
+    "Weekly Schedule": {
+      "main": [[{"node": "Generate Presidents", "type": "main", "index": 0}]]
+    },
+    "Manual Trigger": {
+      "main": [[{"node": "Generate Presidents", "type": "main", "index": 0}]]
+    },
+    "Generate Presidents": {
+      "main": [[{"node": "Fetch Enacted Bills", "type": "main", "index": 0}]]
+    },
+    "Fetch Enacted Bills": {
+      "main": [[{"node": "Extract Bills by President", "type": "main", "index": 0}]]
+    },
+    "Extract Bills by President": {
+      "main": [[{"node": "Batch Bills", "type": "main", "index": 0}]]
+    },
+    "Batch Bills": {
+      "main": [
+        [{"node": "Has Bill Data", "type": "main", "index": 0}],
+        []
+      ]
+    },
+    "Has Bill Data": {
+      "main": [
+        [{"node": "Google Search", "type": "main", "index": 0}],
+        []
+      ]
+    },
+    "Google Search": {
+      "main": [[{"node": "Calculate Popularity", "type": "main", "index": 0}]]
+    },
+    "Calculate Popularity": {
+      "main": [[{"node": "Update Popularity", "type": "main", "index": 0}]]
+    },
+    "Update Popularity": {
+      "main": [[{"node": "Rate Limit Wait", "type": "main", "index": 0}]]
+    },
+    "Rate Limit Wait": {
+      "main": [[{"node": "Batch Bills", "type": "main", "index": 0}]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

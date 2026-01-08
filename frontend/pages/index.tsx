@@ -180,9 +180,9 @@ export default function Home() {
       const stats = await getBillsVoteStats(billsForStats.map((b: Bill) => b.id));
       setStatsByBill((prev) => ({ ...prev, ...stats }));
       
-      // Fetch popular bills by president
+      // Fetch popular bills by president (top 5 per president)
       try {
-        const popular = await getPopularBillsByPresident(2);
+        const popular = await getPopularBillsByPresident(5);
         setPopularByPresident(popular);
       } catch (err) {
         console.error('Error loading popular bills by president:', err);
