@@ -156,6 +156,44 @@ class LocalLLMClient(LLMClient):
             return SummarySectionOutput(**summary_dict)
 
 
+class GroqClient(LLMClient):
+    """Groq client - FREE tier with Llama/Mixtral models (OpenAI-compatible)"""
+    
+    def __init__(self):
+        self.api_key = settings.LLM_API_KEY
+        self.model = settings.LLM_MODEL or "llama-3.1-8b-instant"  # Free, fast model
+        self.base_url = "https://api.groq.com/openai/v1"
+    
+    async def generate_summary(self, section_text: str, section_key: str = None, heading: str = None) -> SummarySectionOutput:
+        prompt = self._build_prompt(section_text, section_key, heading)
+        
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(
+                f"{self.base_url}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": self.model,
+                    "messages": [
+                        {"role": "system", "content": "You are a precise legislative analyst. Always respond with valid JSON."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    "temperature": 0.3,
+                    "response_format": {"type": "json_object"}
+                }
+            )
+            response.raise_for_status()
+            
+            result = response.json()
+            content = result["choices"][0]["message"]["content"]
+            
+            # Parse JSON response
+            summary_dict = json.loads(content)
+            return SummarySectionOutput(**summary_dict)
+
+
 def get_llm_client() -> LLMClient:
     """Factory function to get the configured LLM client"""
     provider = settings.LLM_PROVIDER.lower()
@@ -164,6 +202,8 @@ def get_llm_client() -> LLMClient:
         return OpenAIClient()
     elif provider == "anthropic":
         return AnthropicClient()
+    elif provider == "groq":
+        return GroqClient()
     elif provider == "local":
         return LocalLLMClient()
     else:

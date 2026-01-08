@@ -14,10 +14,10 @@ class Settings(BaseSettings):
     CONGRESS_API_KEY: str = ""
     
     # LLM Configuration
-    LLM_PROVIDER: str = "openai"  # openai, anthropic, or local
-    LLM_MODEL: str = "gpt-4"
+    LLM_PROVIDER: str = "openai"  # openai, anthropic, local, or groq
+    LLM_MODEL: str = "gpt-4o-mini"  # Cheap but effective for summarization
     LLM_API_KEY: str = ""
-    LLM_BASE_URL: str = ""  # For local models
+    LLM_BASE_URL: str = ""  # For local models or Groq: https://api.groq.com/openai/v1
     
     # Application
     # NOTE: required (do not ship with a default)
