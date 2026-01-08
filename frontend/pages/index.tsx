@@ -714,10 +714,38 @@ export default function Home() {
                       {/* Bills under this president */}
                       {hasBills && !isCollapsed && (
                         <div className="divide-y divide-gray-200">
-                          {bills.map((bill) => {
-                            // Check if this bill is in the top 2 popular for this president
+                          {/* Sort bills: popular first (by score desc), then by date desc */}
+                          {(() => {
+                            const popularBillsForPres = popularByPresident[presName] || [];
+                            const popularBillIds = new Set(popularBillsForPres.map(pb => pb.bill_id));
+                            const popularScores = Object.fromEntries(
+                              popularBillsForPres.map(pb => [pb.bill_id, pb.popularity_score])
+                            );
+                            
+                            return [...bills].sort((a, b) => {
+                              const aIsPopular = popularBillIds.has(a.id) || a.is_popular;
+                              const bIsPopular = popularBillIds.has(b.id) || b.is_popular;
+                              
+                              // Popular bills first
+                              if (aIsPopular && !bIsPopular) return -1;
+                              if (!aIsPopular && bIsPopular) return 1;
+                              
+                              // If both popular, sort by score desc
+                              if (aIsPopular && bIsPopular) {
+                                const aScore = popularScores[a.id] || a.popularity_score || 0;
+                                const bScore = popularScores[b.id] || b.popularity_score || 0;
+                                if (bScore !== aScore) return bScore - aScore;
+                              }
+                              
+                              // Then by date desc (newest first)
+                              const aDate = a.latest_action_date ? new Date(a.latest_action_date).getTime() : 0;
+                              const bDate = b.latest_action_date ? new Date(b.latest_action_date).getTime() : 0;
+                              return bDate - aDate;
+                            });
+                          })().map((bill) => {
+                            // Check if this bill is in the top popular for this president
                             const popularBills = popularByPresident[presName] || [];
-                            const isPopular = popularBills.some(pb => pb.bill_id === bill.id);
+                            const isPopular = popularBills.some(pb => pb.bill_id === bill.id) || bill.is_popular;
                             return (
                             <Link
                               key={bill.id}
