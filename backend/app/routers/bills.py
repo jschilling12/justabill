@@ -288,30 +288,7 @@ async def get_my_bill_summary(
     return summary
 
 
-@router.post("/{bill_id}/resummarize")
-async def resummarize_bill(
-    bill_id: UUID,
-    db: Session = Depends(get_db),
-    _admin: None = Depends(require_admin_key),
-):
-    """Trigger re-summarization of all sections in a bill"""
-    from app.tasks import resummarize_bill_task
-    
-    # Check if bill exists
-    bill = db.query(Bill).filter(Bill.id == bill_id).first()
-    if not bill:
-        raise HTTPException(status_code=404, detail="Bill not found")
-    
-    # Trigger async task
-    task = resummarize_bill_task.delay(str(bill_id))
-    
-    return {
-        "message": "Re-summarization task queued",
-        "bill_id": bill_id,
-        "task_id": task.id
-    }
-
-
+# NOTE: This route MUST be defined before /{bill_id} routes to avoid being captured by the UUID pattern
 @router.post("/resummarize-failed")
 async def resummarize_failed_sections(
     db: Session = Depends(get_db),
@@ -351,6 +328,30 @@ async def resummarize_failed_sections(
         "failed_count": len(failed_sections),
         "null_count": len(null_sections),
         "task_ids": task_ids[:10]  # Return first 10 task IDs
+    }
+
+
+@router.post("/{bill_id}/resummarize")
+async def resummarize_bill(
+    bill_id: UUID,
+    db: Session = Depends(get_db),
+    _admin: None = Depends(require_admin_key),
+):
+    """Trigger re-summarization of all sections in a bill"""
+    from app.tasks import resummarize_bill_task
+    
+    # Check if bill exists
+    bill = db.query(Bill).filter(Bill.id == bill_id).first()
+    if not bill:
+        raise HTTPException(status_code=404, detail="Bill not found")
+    
+    # Trigger async task
+    task = resummarize_bill_task.delay(str(bill_id))
+    
+    return {
+        "message": "Re-summarization task queued",
+        "bill_id": bill_id,
+        "task_id": task.id
     }
 
 
