@@ -1,0 +1,165 @@
+{
+  "name": "Active Bills Sync (Passed House/Senate)",
+  "active": false,
+  "versionId": "1",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 7 * * *"
+            }
+          ]
+        }
+      },
+      "name": "Daily Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "id": "schedule-active-bills",
+      "notes": "Runs daily at 7 AM to fetch bills that have passed House or Senate"
+    },
+    {
+      "parameters": {},
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [250, 500],
+      "id": "manual-trigger-active"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generate API calls for different bill statuses we want to track\n// These are bills actively moving through Congress\nconst statuses = [\n  'passedHouse',\n  'passedSenate', \n  'presentedToPresident',\n  'resolvedHouse',\n  'resolvedSenate'\n];\n\n// Also fetch recent bills sorted by latest action\nconst apiCalls = statuses.map(status => ({\n  json: {\n    status: status,\n    url: `https://api.congress.gov/v3/bill/119?api_key=${$env.CONGRESS_API_KEY}&format=json&limit=100&sort=latestAction+desc`\n  }\n}));\n\n// Add a call to fetch by latest action for current congress\napiCalls.push({\n  json: {\n    status: 'recent',\n    url: `https://api.congress.gov/v3/bill/119?api_key=${$env.CONGRESS_API_KEY}&format=json&limit=250&sort=latestAction+desc`\n  }\n});\n\nreturn apiCalls;"
+      },
+      "name": "Generate API Calls",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 400],
+      "id": "generate-api-calls"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{$json.url}}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "name": "Fetch Bills by Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [650, 400],
+      "id": "fetch-bills-status",
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Collect all bills from all status queries and dedupe\nconst items = $input.all();\nconst allBills = new Map();\n\n// Ceremonial bill filters (same as enacted-bills workflow)\nconst CEREMONIAL_PATTERNS = [\n  /post office/i,\n  /postal facility/i,\n  /naming (the|a) /i,\n  /to designate the facility/i,\n  /va (outpatient|medical|health)/i,\n  /department of veterans affairs.*facility/i,\n  /congressional gold medal/i,\n  /commemorative coin/i,\n  /for the relief of/i,\n  /technical corrections? (to|act)/i,\n  /continuing appropriations and extensions act/i,\n  /further continuing appropriations/i,\n  /further additional continuing/i,\n  /airport.*extension/i\n];\n\nfunction isCeremonial(title) {\n  if (!title) return false;\n  return CEREMONIAL_PATTERNS.some(pattern => pattern.test(title));\n}\n\nfunction parseFromUrl(url) {\n  const urlParts = String(url || '').split('/');\n  if (urlParts.length < 7) return null;\n  const congress = parseInt(urlParts[urlParts.length - 3], 10);\n  const bill_type = urlParts[urlParts.length - 2];\n  const bill_number = parseInt(urlParts[urlParts.length - 1], 10);\n  if (!congress || !bill_type || !bill_number) return null;\n  return { congress, bill_type, bill_number };\n}\n\nfor (const item of items) {\n  const bills = item.json.bills || [];\n  \n  for (const bill of bills) {\n    // Skip ceremonial bills\n    if (isCeremonial(bill.title)) continue;\n    \n    // Only HR and S bills (skip resolutions for voting)\n    const parsed = parseFromUrl(bill.url);\n    if (!parsed) continue;\n    if (!['hr', 's'].includes(parsed.bill_type)) continue;\n    \n    // Create unique key\n    const key = `${parsed.congress}-${parsed.bill_type}-${parsed.bill_number}`;\n    \n    if (!allBills.has(key)) {\n      allBills.set(key, {\n        congress: parsed.congress,\n        bill_type: parsed.bill_type,\n        bill_number: parsed.bill_number,\n        title: bill.title,\n        latestAction: bill.latestAction?.text || null,\n        latestActionDate: bill.latestAction?.actionDate || null\n      });\n    }\n  }\n}\n\n// Convert to array and sort by latest action date\nconst results = Array.from(allBills.values())\n  .sort((a, b) => {\n    if (!a.latestActionDate) return 1;\n    if (!b.latestActionDate) return -1;\n    return new Date(b.latestActionDate) - new Date(a.latestActionDate);\n  })\n  .slice(0, 100); // Limit to 100 most recent\n\nif (results.length === 0) {\n  return [{ json: { _empty: true } }];\n}\n\nreturn results.map(b => ({ json: b }));"
+      },
+      "name": "Dedupe & Filter Bills",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [850, 400],
+      "id": "dedupe-filter"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.congress }}",
+              "operation": "isNotEmpty"
+            }
+          ]
+        }
+      },
+      "name": "Has Bill Data",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1050, 400],
+      "id": "has-bill-data-active"
+    },
+    {
+      "parameters": {
+        "batchSize": 3,
+        "options": {}
+      },
+      "name": "Batch Bills",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [1250, 400],
+      "id": "batch-active-bills"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://98.94.94.17/api/ingest/bill",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"congress\": {{ $json.congress }},\n  \"bill_type\": \"{{ $json.bill_type }}\",\n  \"bill_number\": {{ $json.bill_number }}\n}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "name": "Ingest Bill",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1450, 400],
+      "id": "ingest-active-bill",
+      "continueOnFail": true,
+      "notes": "Ingest bill - will fetch text and generate AI summaries"
+    },
+    {
+      "parameters": {
+        "amount": 3,
+        "unit": "seconds"
+      },
+      "name": "Rate Limit Wait",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [1650, 400],
+      "id": "wait-active-bills",
+      "notes": "Wait between ingestions to avoid overwhelming the API"
+    }
+  ],
+  "connections": {
+    "Daily Schedule": {
+      "main": [[{"node": "Generate API Calls", "type": "main", "index": 0}]]
+    },
+    "Manual Trigger": {
+      "main": [[{"node": "Generate API Calls", "type": "main", "index": 0}]]
+    },
+    "Generate API Calls": {
+      "main": [[{"node": "Fetch Bills by Status", "type": "main", "index": 0}]]
+    },
+    "Fetch Bills by Status": {
+      "main": [[{"node": "Dedupe & Filter Bills", "type": "main", "index": 0}]]
+    },
+    "Dedupe & Filter Bills": {
+      "main": [[{"node": "Has Bill Data", "type": "main", "index": 0}]]
+    },
+    "Has Bill Data": {
+      "main": [
+        [{"node": "Batch Bills", "type": "main", "index": 0}],
+        []
+      ]
+    },
+    "Batch Bills": {
+      "main": [
+        [{"node": "Ingest Bill", "type": "main", "index": 0}],
+        []
+      ]
+    },
+    "Ingest Bill": {
+      "main": [[{"node": "Rate Limit Wait", "type": "main", "index": 0}]]
+    },
+    "Rate Limit Wait": {
+      "main": [[{"node": "Batch Bills", "type": "main", "index": 0}]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
