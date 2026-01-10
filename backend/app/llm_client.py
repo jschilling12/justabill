@@ -161,7 +161,7 @@ class GroqClient(LLMClient):
     
     def __init__(self):
         self.api_key = settings.LLM_API_KEY
-        self.model = settings.LLM_MODEL or "llama-3.1-8b-instant"  # Free, fast model
+        self.model = settings.LLM_MODEL or "llama-3.3-70b-versatile"  # Free, powerful model
         self.base_url = "https://api.groq.com/openai/v1"
     
     async def generate_summary(self, section_text: str, section_key: str = None, heading: str = None) -> SummarySectionOutput:
