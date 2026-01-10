@@ -141,6 +141,15 @@
       "parameters": {
         "method": "PATCH",
         "url": "=http://98.94.94.17/api/bills/lookup/{{$json.congress}}/{{$json.bill_type}}/{{$json.bill_number}}/popularity",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Admin-Key",
+              "value": "={{$env.ADMIN_API_KEY}}"
+            }
+          ]
+        },
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={\n  \"is_popular\": {{$json.is_popular}},\n  \"popularity_score\": {{$json.popularity_score}}\n}",
