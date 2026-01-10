@@ -61,6 +61,19 @@ class CongressAPIClient:
             data = response.json()
             return data.get("bills", [])
 
+    async def get_bill_actions(self, congress: int, bill_type: str, bill_number: int) -> List[Dict[str, Any]]:
+        """Fetch all actions for a bill to determine its status more accurately"""
+        url = f"{self.base_url}/bill/{congress}/{bill_type}/{bill_number}/actions"
+        
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(
+                url,
+                params={"api_key": self.api_key, "format": "json", "limit": 100}
+            )
+            response.raise_for_status()
+            data = response.json()
+            return data.get("actions", [])
+
 
 class BillTextFetcher:
     """Fetches and processes bill text from various sources"""

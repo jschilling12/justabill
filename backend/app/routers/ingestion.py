@@ -33,36 +33,72 @@ def _get_congress_gov_url(congress: int, bill_type: str, bill_number: int) -> st
     return f"https://www.congress.gov/bill/{congress}th-congress/{url_bill_type}/{bill_number}"
 
 
-def _map_status(latest_action: dict) -> str:
-    """Map Congress.gov latest action to our BillStatus enum"""
-    action_text = (latest_action.get('text') or '').lower()
+def _map_status(latest_action: dict, all_actions: list = None) -> str:
+    """
+    Map Congress.gov actions to our BillStatus enum.
+    Uses all actions history for accuracy, not just latest action.
+    """
+    # Collect all action text for analysis
+    all_action_texts = []
     
-    # Check for enacted/law
-    if 'became public law' in action_text or 'became law' in action_text:
+    # Add latest action
+    if latest_action:
+        all_action_texts.append((latest_action.get('text') or '').lower())
+    
+    # Add all historical actions if provided
+    if all_actions:
+        for action in all_actions:
+            all_action_texts.append((action.get('text') or '').lower())
+    
+    # Join all text for comprehensive search
+    combined_text = ' '.join(all_action_texts)
+    
+    # Check for enacted/law (highest priority)
+    if 'became public law' in combined_text or 'became law' in combined_text:
         return 'enacted'
     
     # Check for vetoed
-    if 'veto' in action_text:
+    if 'veto' in combined_text and 'override' not in combined_text:
         return 'vetoed'
     
     # Check for passed both chambers
-    if 'passed senate' in action_text and 'passed house' in action_text:
+    passed_house = any(
+        'passed house' in t or 'agreed to in house' in t or 
+        'on passage passed' in t and 'house' in t
+        for t in all_action_texts
+    )
+    passed_senate = any(
+        'passed senate' in t or 'agreed to in senate' in t or
+        'on passage passed' in t and 'senate' in t
+        for t in all_action_texts
+    )
+    
+    if passed_house and passed_senate:
         return 'passed_both'
     
     # Check for conference
-    if 'conference' in action_text:
+    if 'conference' in combined_text:
         return 'in_conference'
     
-    # Check for passed Senate
-    if 'passed senate' in action_text or 'agreed to in senate' in action_text:
+    # Check for passed Senate only
+    if passed_senate:
         return 'passed_senate'
     
-    # Check for passed House
-    if 'passed house' in action_text or 'agreed to in house' in action_text:
+    # Check for passed House only
+    if passed_house:
+        return 'passed_house'
+    
+    # Check for Senate activity (bill originated in House and moved to Senate)
+    senate_activity = any(
+        action.get('sourceSystem', {}).get('name') == 'Senate'
+        for action in (all_actions or [])
+    )
+    if senate_activity:
+        # If there's Senate activity, the bill likely passed the House
         return 'passed_house'
     
     # Check for committee action
-    if 'committee' in action_text or 'referred to' in action_text:
+    if 'committee' in combined_text or 'referred to' in combined_text:
         return 'in_committee'
     
     # Default to introduced
@@ -98,6 +134,14 @@ async def ingest_bill(
         if not bill_data:
             raise HTTPException(status_code=404, detail="Bill not found in Congress.gov API")
         
+        # Fetch all actions for better status detection
+        logger.info(f"Fetching bill actions for accurate status detection")
+        all_actions = await congress_client.get_bill_actions(
+            request.congress,
+            request.bill_type,
+            request.bill_number
+        )
+        
         # Check if bill already exists
         existing_bill = db.query(Bill).filter(
             Bill.congress == request.congress,
@@ -105,14 +149,15 @@ async def ingest_bill(
             Bill.bill_number == request.bill_number
         ).first()
         
-        # Use force_status if provided, otherwise parse from latest action
+        # Use force_status if provided, otherwise parse from actions
         if request.force_status:
             status = request.force_status
             logger.info(f"Using forced status: {status}")
         else:
-            # Parse status from latest action
+            # Parse status from latest action + all actions
             latest_action = bill_data.get('latestAction', {})
-            status_str = _map_status(latest_action)
+            status_str = _map_status(latest_action, all_actions)
+            logger.info(f"Detected status from actions: {status_str}")
             try:
                 status = BillStatus(status_str)
             except ValueError:
