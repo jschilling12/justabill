@@ -168,28 +168,44 @@ class GroqClient(LLMClient):
         prompt = self._build_prompt(section_text, section_key, heading)
         
         async with httpx.AsyncClient(timeout=60.0) as client:
+            # Build request - only use json_object mode for supported models
+            request_body = {
+                "model": self.model,
+                "messages": [
+                    {"role": "system", "content": "You are a precise legislative analyst. Always respond with valid JSON only. No markdown, no explanation, just the JSON object."},
+                    {"role": "user", "content": prompt}
+                ],
+                "temperature": 0.3,
+                "max_tokens": 2000
+            }
+            
+            # JSON mode is supported for llama3-groq and some other models
+            # But can cause issues with llama-3.1 models, so we skip it
+            # The prompt already instructs JSON output
+            
             response = await client.post(
                 f"{self.base_url}/chat/completions",
                 headers={
                     "Authorization": f"Bearer {self.api_key}",
                     "Content-Type": "application/json"
                 },
-                json={
-                    "model": self.model,
-                    "messages": [
-                        {"role": "system", "content": "You are a precise legislative analyst. Always respond with valid JSON."},
-                        {"role": "user", "content": prompt}
-                    ],
-                    "temperature": 0.3,
-                    "response_format": {"type": "json_object"}
-                }
+                json=request_body
             )
             response.raise_for_status()
             
             result = response.json()
             content = result["choices"][0]["message"]["content"]
             
-            # Parse JSON response
+            # Parse JSON response - handle potential markdown wrapping
+            content = content.strip()
+            if content.startswith("```json"):
+                content = content[7:]
+            if content.startswith("```"):
+                content = content[3:]
+            if content.endswith("```"):
+                content = content[:-3]
+            content = content.strip()
+            
             summary_dict = json.loads(content)
             return SummarySectionOutput(**summary_dict)
 
