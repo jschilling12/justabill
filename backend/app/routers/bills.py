@@ -289,6 +289,57 @@ async def get_my_bill_summary(
 
 
 # NOTE: This route MUST be defined before /{bill_id} routes to avoid being captured by the UUID pattern
+@router.get("/debug/failed-summaries")
+async def get_failed_summaries_debug(
+    db: Session = Depends(get_db),
+    _admin: None = Depends(require_admin_key),
+):
+    """Debug endpoint: show actual error messages from failed summaries"""
+    from sqlalchemy import cast, String
+    
+    # Find sections where summary_json contains "Error"
+    failed_sections = db.query(BillSection).filter(
+        cast(BillSection.summary_json, String).like('%Error%')
+    ).limit(20).all()
+    
+    # Also find sections with no summary at all
+    null_sections = db.query(BillSection).filter(
+        BillSection.summary_json.is_(None)
+    ).limit(20).all()
+    
+    results = {
+        "failed_with_errors": [],
+        "null_summaries": []
+    }
+    
+    for section in failed_sections:
+        bill = db.query(Bill).filter(Bill.id == section.bill_id).first()
+        results["failed_with_errors"].append({
+            "section_id": str(section.id),
+            "bill_title": bill.title if bill else "Unknown",
+            "section_key": section.section_key,
+            "error_message": section.summary_json.get("plain_summary_bullets", [None])[0] if section.summary_json else None,
+            "full_summary_json": section.summary_json
+        })
+    
+    for section in null_sections:
+        bill = db.query(Bill).filter(Bill.id == section.bill_id).first()
+        results["null_summaries"].append({
+            "section_id": str(section.id),
+            "bill_title": bill.title if bill else "Unknown",
+            "section_key": section.section_key,
+            "section_text_preview": section.section_text[:200] if section.section_text else None
+        })
+    
+    results["counts"] = {
+        "failed_with_errors": len(results["failed_with_errors"]),
+        "null_summaries": len(results["null_summaries"])
+    }
+    
+    return results
+
+
+# NOTE: This route MUST be defined before /{bill_id} routes to avoid being captured by the UUID pattern
 @router.post("/resummarize-failed")
 async def resummarize_failed_sections(
     db: Session = Depends(get_db),
