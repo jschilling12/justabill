@@ -406,6 +406,109 @@ async def resummarize_bill(
     }
 
 
+@router.post("/{bill_id}/summarize-sync")
+async def summarize_bill_sync(
+    bill_id: UUID,
+    max_sections: int = Query(10, ge=1, le=50, description="Max sections to summarize in one request"),
+    db: Session = Depends(get_db),
+):
+    """
+    Synchronously summarize sections that are missing summaries.
+    This is a fallback when Celery workers aren't running.
+    Does NOT require admin key - can be triggered by viewing a bill.
+    """
+    from app.llm_client import get_llm_client
+    from sqlalchemy import or_, cast, String
+    
+    # Check if bill exists
+    bill = db.query(Bill).filter(Bill.id == bill_id).first()
+    if not bill:
+        raise HTTPException(status_code=404, detail="Bill not found")
+    
+    # Find sections that need summarization (null or error)
+    sections_to_summarize = db.query(BillSection).filter(
+        BillSection.bill_id == bill_id,
+        or_(
+            BillSection.summary_json.is_(None),
+            cast(BillSection.summary_json, String).like('%Error generating%')
+        )
+    ).limit(max_sections).all()
+    
+    if not sections_to_summarize:
+        return {
+            "message": "All sections already have summaries",
+            "bill_id": str(bill_id),
+            "summarized": 0,
+            "failed": 0
+        }
+    
+    # Get LLM client
+    try:
+        llm_client = get_llm_client()
+    except Exception as e:
+        logger.error(f"Failed to get LLM client: {e}")
+        raise HTTPException(status_code=500, detail=f"LLM client not configured: {str(e)}")
+    
+    # Summarize sections synchronously
+    summarized = 0
+    failed = 0
+    errors = []
+    
+    for section in sections_to_summarize:
+        try:
+            logger.info(f"Summarizing section {section.id} synchronously")
+            
+            # Generate summary
+            summary = await llm_client.generate_summary(
+                section_text=section.section_text,
+                section_key=section.section_key,
+                heading=section.heading
+            )
+            
+            # Store summary
+            section.summary_json = {
+                "plain_summary_bullets": summary.plain_summary_bullets,
+                "key_terms": summary.key_terms,
+                "who_it_affects": summary.who_it_affects,
+                "uncertainties": summary.uncertainties
+            }
+            section.evidence_quotes = summary.evidence_quotes
+            
+            db.add(section)
+            summarized += 1
+            
+        except Exception as e:
+            logger.error(f"Error summarizing section {section.id}: {e}")
+            # Store error info
+            section.summary_json = {
+                "plain_summary_bullets": [f"Error generating summary: {str(e)}"],
+                "key_terms": [],
+                "who_it_affects": [],
+                "uncertainties": ["Summary generation failed"]
+            }
+            section.evidence_quotes = []
+            db.add(section)
+            failed += 1
+            errors.append({"section_id": str(section.id), "error": str(e)})
+    
+    db.commit()
+    
+    return {
+        "message": f"Summarized {summarized} sections, {failed} failed",
+        "bill_id": str(bill_id),
+        "summarized": summarized,
+        "failed": failed,
+        "errors": errors[:5] if errors else None,  # Return first 5 errors
+        "remaining": db.query(BillSection).filter(
+            BillSection.bill_id == bill_id,
+            or_(
+                BillSection.summary_json.is_(None),
+                cast(BillSection.summary_json, String).like('%Error generating%')
+            )
+        ).count()
+    }
+
+
 @router.delete("/cleanup")
 async def cleanup_old_bills(
     older_than_days: int = Query(60, ge=1, le=365, description="Delete bills not updated in X days"),

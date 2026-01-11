@@ -453,4 +453,19 @@ export const PRESIDENT_CONGRESS_MAP: Record<string, { start: number; end: number
   "George H.W. Bush": { start: 101, end: 102, years: "1989-1993" },
 };
 
+// Trigger synchronous summarization for a bill (fallback when Celery isn't running)
+export interface SummarizeSyncResponse {
+  message: string;
+  bill_id: string;
+  summarized: number;
+  failed: number;
+  remaining: number;
+  errors?: Array<{ section_id: string; error: string }>;
+}
+
+export async function triggerSummarizeBill(billId: string, maxSections: number = 10): Promise<SummarizeSyncResponse> {
+  const response = await api.post(`/bills/${billId}/summarize-sync?max_sections=${maxSections}`);
+  return response.data;
+}
+
 export default api;

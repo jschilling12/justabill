@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import {
@@ -11,6 +11,7 @@ import {
   getMyVotesForBill,
   getMe,
   updateMeAffiliation,
+  triggerSummarizeBill,
   BillSection,
   BillWithSections,
   UserBillSummary,
@@ -37,6 +38,64 @@ export default function BillPage() {
   const [me, setMe] = useState<any>(null);
   const [showAffiliationPrompt, setShowAffiliationPrompt] = useState(false);
   const [affiliationInput, setAffiliationInput] = useState('');
+  const [isSummarizing, setIsSummarizing] = useState(false);
+  const [summarizeAttempted, setSummarizeAttempted] = useState(false);
+
+  // Check if any sections need summarization
+  const hasMissingSummaries = useCallback((sections: BillSection[]) => {
+    return sections.some(section => 
+      !section.summary_json || 
+      section.summary_json.plain_summary_bullets?.[0]?.startsWith('Error generating')
+    );
+  }, []);
+
+  // Auto-trigger summarization for sections with missing summaries
+  const autoSummarize = useCallback(async (billId: string) => {
+    if (summarizeAttempted) return;
+    setSummarizeAttempted(true);
+    setIsSummarizing(true);
+    
+    try {
+      console.log('Auto-triggering summarization for bill:', billId);
+      const result = await triggerSummarizeBill(billId, 20);
+      console.log('Summarization result:', result);
+      
+      if (result.summarized > 0) {
+        // Reload the bill to get updated summaries
+        const updatedBill = await getBill(billId);
+        setBill(updatedBill);
+      }
+    } catch (error) {
+      console.error('Error auto-summarizing:', error);
+    } finally {
+      setIsSummarizing(false);
+    }
+  }, [summarizeAttempted]);
+
+  // Manual retry summarization
+  const handleRetrySummarize = async () => {
+    if (!bill || isSummarizing) return;
+    setIsSummarizing(true);
+    
+    try {
+      console.log('Manual retry summarization for bill:', bill.id);
+      const result = await triggerSummarizeBill(bill.id, 20);
+      console.log('Summarization result:', result);
+      
+      if (result.summarized > 0) {
+        // Reload the bill to get updated summaries
+        const updatedBill = await getBill(bill.id);
+        setBill(updatedBill);
+      } else if (result.failed > 0) {
+        alert(`Summarization failed for ${result.failed} sections. This may be due to API limits or configuration issues.`);
+      }
+    } catch (error) {
+      console.error('Error retrying summarization:', error);
+      alert('Failed to generate summaries. Please try again later.');
+    } finally {
+      setIsSummarizing(false);
+    }
+  };
 
   // Build back URL based on where user came from
   const getBackUrl = () => {
@@ -61,6 +120,15 @@ export default function BillPage() {
       loadBill();
     }
   }, [id]);
+
+  // Auto-trigger summarization if sections have missing/failed summaries
+  useEffect(() => {
+    if (bill && bill.sections && !summarizeAttempted && !isSummarizing) {
+      if (hasMissingSummaries(bill.sections)) {
+        autoSummarize(bill.id);
+      }
+    }
+  }, [bill, summarizeAttempted, isSummarizing, hasMissingSummaries, autoSummarize]);
 
   useEffect(() => {
     if (!id) return;
@@ -489,6 +557,39 @@ export default function BillPage() {
           </div>
         )}
 
+        {/* AI Summary Status Banner */}
+        {bill && hasMissingSummaries(bill.sections) && !isSummarizing && summarizeAttempted && (
+          <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-amber-800">
+                ⚠️ Some sections don't have AI summaries yet
+              </p>
+              <p className="text-xs text-amber-600 mt-1">
+                Summaries help you understand each section. Click retry to generate them.
+              </p>
+            </div>
+            <button
+              onClick={handleRetrySummarize}
+              className="px-4 py-2 bg-amber-600 text-white rounded-lg text-sm hover:bg-amber-700 transition-colors"
+            >
+              Retry Summaries
+            </button>
+          </div>
+        )}
+
+        {isSummarizing && (
+          <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg flex items-center gap-3">
+            <svg className="animate-spin h-5 w-5 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <div>
+              <p className="text-sm font-medium text-blue-800">Generating AI summaries...</p>
+              <p className="text-xs text-blue-600 mt-1">This may take a moment. You can still browse and vote while waiting.</p>
+            </div>
+          </div>
+        )}
+
         {/* Tabs */}
         <div className="mb-6">
           <div className="inline-flex rounded-lg bg-gray-100 p-1">
@@ -624,10 +725,24 @@ export default function BillPage() {
                             {section.summary_json ? (
                               section.summary_json.plain_summary_bullets[0]?.startsWith('Error generating') ? (
                                 <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded text-sm text-amber-700">
-                                  <p className="font-medium">⚠️ AI summary unavailable</p>
-                                  <p className="text-xs mt-1 text-amber-600">
-                                    Read the official text on Congress.gov for full details.
-                                  </p>
+                                  {isSummarizing ? (
+                                    <>
+                                      <p className="font-medium flex items-center gap-2">
+                                        <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        </svg>
+                                        Generating AI summary...
+                                      </p>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <p className="font-medium">⚠️ AI summary unavailable</p>
+                                      <p className="text-xs mt-1 text-amber-600">
+                                        Read the official text on Congress.gov for full details.
+                                      </p>
+                                    </>
+                                  )}
                                 </div>
                               ) : (
                                 <ul className="mt-2 list-disc list-inside space-y-1 text-sm text-gray-600">
@@ -638,7 +753,17 @@ export default function BillPage() {
                               )
                             ) : (
                               <div className="mt-2 p-2 bg-gray-50 border border-gray-200 rounded text-sm text-gray-500">
-                                <p>No AI summary available for this section.</p>
+                                {isSummarizing ? (
+                                  <p className="flex items-center gap-2">
+                                    <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                    Generating AI summary...
+                                  </p>
+                                ) : (
+                                  <p>No AI summary available for this section.</p>
+                                )}
                               </div>
                             )}
                           </div>
@@ -715,12 +840,24 @@ export default function BillPage() {
                   {section.summary_json ? (
                     section.summary_json.plain_summary_bullets[0]?.startsWith('Error generating') ? (
                       <div className="bg-amber-50 border border-amber-200 rounded p-4">
-                        <p className="text-sm text-amber-800 font-medium">
-                          ⚠️ AI summary unavailable
-                        </p>
-                        <p className="text-sm text-amber-700 mt-1">
-                          Read the official text on Congress.gov for full details. You can still vote on this section!
-                        </p>
+                        {isSummarizing ? (
+                          <p className="text-sm text-amber-800 font-medium flex items-center gap-2">
+                            <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Generating AI summary...
+                          </p>
+                        ) : (
+                          <>
+                            <p className="text-sm text-amber-800 font-medium">
+                              ⚠️ AI summary unavailable
+                            </p>
+                            <p className="text-sm text-amber-700 mt-1">
+                              Read the official text on Congress.gov for full details. You can still vote on this section!
+                            </p>
+                          </>
+                        )}
                       </div>
                     ) : (
                       <>
@@ -754,9 +891,19 @@ export default function BillPage() {
                     )
                   ) : (
                     <div className="bg-gray-50 border border-gray-200 rounded p-4">
-                      <p className="text-sm text-gray-600">
-                        No AI summary available for this section. You can still vote!
-                      </p>
+                      {isSummarizing ? (
+                        <p className="text-sm text-gray-600 flex items-center gap-2">
+                          <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          Generating AI summary...
+                        </p>
+                      ) : (
+                        <p className="text-sm text-gray-600">
+                          No AI summary available for this section. You can still vote!
+                        </p>
+                      )}
                     </div>
                   )}
 

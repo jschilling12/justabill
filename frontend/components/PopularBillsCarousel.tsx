@@ -10,21 +10,17 @@ interface PopularBillsCarouselProps {
 export default function PopularBillsCarousel({ bills, renderVotePreview }: PopularBillsCarouselProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [isPaused, setIsPaused] = useState(false);
-  const [showLeftArrow, setShowLeftArrow] = useState(false);
-  const [showRightArrow, setShowRightArrow] = useState(true);
+  // Always show arrows for infinite loop navigation
+  const showLeftArrow = bills.length > 3;
+  const showRightArrow = bills.length > 3;
 
   // Card width + gap (320px card + 16px gap)
   const CARD_WIDTH = 336;
   const SCROLL_AMOUNT = CARD_WIDTH;
 
-  // Update arrow visibility based on scroll position
-  const updateArrowVisibility = useCallback(() => {
-    const container = scrollContainerRef.current;
-    if (!container) return;
-
-    const { scrollLeft, scrollWidth, clientWidth } = container;
-    setShowLeftArrow(scrollLeft > 10);
-    setShowRightArrow(scrollLeft < scrollWidth - clientWidth - 10);
+  // Update scroll position tracking (for dots highlighting, future enhancement)
+  const updateScrollPosition = useCallback(() => {
+    // No-op for now, kept for scroll event listener compatibility
   }, []);
 
   // Handle horizontal mouse wheel scrolling
@@ -48,14 +44,13 @@ export default function PopularBillsCarousel({ bills, renderVotePreview }: Popul
     if (!container) return;
 
     container.addEventListener('wheel', handleWheel, { passive: false });
-    container.addEventListener('scroll', updateArrowVisibility);
-    updateArrowVisibility();
+    container.addEventListener('scroll', updateScrollPosition);
 
     return () => {
       container.removeEventListener('wheel', handleWheel);
-      container.removeEventListener('scroll', updateArrowVisibility);
+      container.removeEventListener('scroll', updateScrollPosition);
     };
-  }, [handleWheel, updateArrowVisibility]);
+  }, [handleWheel, updateScrollPosition]);
 
   // Auto-scroll effect (pauses on hover)
   useEffect(() => {
@@ -117,8 +112,8 @@ export default function PopularBillsCarousel({ bills, renderVotePreview }: Popul
       <button
         onClick={scrollLeft}
         className={`absolute left-0 top-1/2 -translate-y-1/2 z-10 bg-white/90 hover:bg-white shadow-lg rounded-full p-2 transition-all duration-200 ${
-          showLeftArrow ? 'opacity-100' : 'opacity-0 pointer-events-none'
-        } group-hover:opacity-100`}
+          showLeftArrow ? 'opacity-70 hover:opacity-100' : 'opacity-0 pointer-events-none'
+        }`}
         aria-label="Scroll left"
       >
         <svg className="w-6 h-6 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -130,8 +125,8 @@ export default function PopularBillsCarousel({ bills, renderVotePreview }: Popul
       <button
         onClick={scrollRight}
         className={`absolute right-0 top-1/2 -translate-y-1/2 z-10 bg-white/90 hover:bg-white shadow-lg rounded-full p-2 transition-all duration-200 ${
-          showRightArrow ? 'opacity-100' : 'opacity-0 pointer-events-none'
-        } group-hover:opacity-100`}
+          showRightArrow ? 'opacity-70 hover:opacity-100' : 'opacity-0 pointer-events-none'
+        }`}
         aria-label="Scroll right"
       >
         <svg className="w-6 h-6 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
