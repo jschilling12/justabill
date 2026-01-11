@@ -114,7 +114,21 @@ class User(Base):
     is_anonymous = Column(Integer, default=1)  # 1 for anonymous sessions
     session_id = Column(String(255), unique=True, nullable=True, index=True)  # For anonymous users
     affiliation_raw = Column(String(255), nullable=True)
-    affiliation_bucket = Column(String(32), nullable=True, index=True)  # republican | liberal | other
+    affiliation_bucket = Column(String(32), nullable=True, index=True)  # republican | democrat | independent | other
+    
+    # Survey Panel Opt-In (monetizable aggregated insights)
+    survey_opt_in = Column(Boolean, nullable=False, server_default="false", index=True)
+    survey_consent_timestamp = Column(DateTime(timezone=True), nullable=True)
+    survey_consent_version = Column(String(20), nullable=True)  # Track consent form version
+    
+    # Geographic data for aggregation (user-provided, optional)
+    zip_code = Column(String(10), nullable=True, index=True)  # 5 or 9 digit ZIP
+    state_code = Column(String(2), nullable=True, index=True)  # Derived from ZIP or user-provided
+    congressional_district = Column(String(10), nullable=True, index=True)  # e.g., "CA-12"
+    
+    # Optional demographics for survey panel (all optional, user-provided)
+    age_range = Column(String(20), nullable=True)  # "18-24", "25-34", "35-44", "45-54", "55-64", "65+"
+    
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     

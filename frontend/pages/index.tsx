@@ -396,11 +396,8 @@ export default function Home() {
                     <h3 className={`font-bold text-gray-900 ${index === 0 ? 'text-lg' : 'text-base'}`}>
                       {bill.bill_type.toUpperCase()}. {bill.bill_number}
                     </h3>
-                    <p className={`mt-1 font-medium ${index === 0 ? 'text-base text-gray-800' : 'text-sm text-gray-700'}`}>
-                      {extractShortTitle(bill.title) || 'Untitled'}
-                    </p>
-                    <p className="mt-2 text-xs text-gray-500 line-clamp-2">
-                      {bill.title || 'No description available'}
+                    <p className={`mt-1 ${index === 0 ? 'text-sm text-gray-800' : 'text-xs text-gray-700'} line-clamp-3`}>
+                      {bill.title || 'Untitled'}
                     </p>
                     <div className="mt-3 flex items-center justify-between">
                       <span className="text-xs text-gray-500 capitalize">
@@ -449,11 +446,8 @@ export default function Home() {
                       <div className="flex-1 min-w-0">
                         <h3 className="text-sm font-medium text-gray-900">
                           {bill.bill_type.toUpperCase()}. {bill.bill_number}
-                          {extractShortTitle(bill.title) && (
-                            <span className="font-normal text-gray-700"> - {extractShortTitle(bill.title)}</span>
-                          )}
                         </h3>
-                        <p className="mt-1 text-xs text-gray-600 line-clamp-1">
+                        <p className="mt-1 text-xs text-gray-700 line-clamp-2">
                           {bill.title || 'No title available'}
                         </p>
                         <div className="mt-1 flex items-center space-x-3 text-[11px] text-gray-500">
@@ -531,13 +525,10 @@ export default function Home() {
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex-1 min-w-0">
-                      <h3 className="text-lg font-medium text-gray-900">
+                      <h3 className="text-base font-medium text-gray-900">
                         {bill.bill_type.toUpperCase()}. {bill.bill_number}
-                        {extractShortTitle(bill.title) && (
-                          <span className="font-normal text-gray-700"> - {extractShortTitle(bill.title)}</span>
-                        )}
                       </h3>
-                      <p className="mt-1 text-sm text-gray-600 line-clamp-2">
+                      <p className="mt-1 text-sm text-gray-700 line-clamp-2">
                         {bill.title || 'No title available'}
                       </p>
                       <div className="mt-2 flex items-center space-x-4 text-xs text-gray-500">

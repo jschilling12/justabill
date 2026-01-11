@@ -86,13 +86,14 @@ async def general_exception_handler(request: Request, exc: Exception):
 
 
 # Include routers
-from app.routers import health, bills, ingestion, votes, auth
+from app.routers import health, bills, ingestion, votes, auth, analytics
 
 app.include_router(health.router, tags=["health"])
 app.include_router(bills.router, prefix="/bills", tags=["bills"])
 app.include_router(ingestion.router, prefix="/ingest", tags=["ingestion"])
 app.include_router(votes.router, prefix="/votes", tags=["votes"])
 app.include_router(auth.router, prefix="/auth", tags=["auth"])
+app.include_router(analytics.router, prefix="/analytics", tags=["analytics"])
 
 
 # Root endpoint

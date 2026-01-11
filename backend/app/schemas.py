@@ -159,6 +159,9 @@ class UserMeResponse(BaseModel):
     email: Optional[str] = None
     affiliation_raw: Optional[str] = None
     affiliation_bucket: Optional[str] = None
+    survey_opt_in: bool = False
+    zip_code: Optional[str] = None
+    age_range: Optional[str] = None
 
     class Config:
         from_attributes = True

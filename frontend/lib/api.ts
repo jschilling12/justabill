@@ -59,6 +59,9 @@ export interface UserMe {
   email?: string | null;
   affiliation_raw?: string | null;
   affiliation_bucket?: string | null;
+  survey_opt_in?: boolean;
+  zip_code?: string | null;
+  age_range?: string | null;
 }
 
 export interface Bill {
@@ -381,6 +384,29 @@ export async function getMe(): Promise<UserMe> {
 
 export async function updateMeAffiliation(affiliation_raw: string | null): Promise<UserMe> {
   const response = await api.patch(`/auth/me`, { affiliation_raw });
+  return response.data;
+}
+
+// Survey Panel Opt-In
+export interface SurveyOptInRequest {
+  opt_in: boolean;
+  zip_code?: string;
+  age_range?: string;
+}
+
+export interface SurveyOptInResponse {
+  success: boolean;
+  survey_opt_in: boolean;
+  message: string;
+}
+
+export async function updateSurveyOptIn(request: SurveyOptInRequest): Promise<SurveyOptInResponse> {
+  const params = new URLSearchParams();
+  params.append('opt_in', String(request.opt_in));
+  if (request.zip_code) params.append('zip_code', request.zip_code);
+  if (request.age_range) params.append('age_range', request.age_range);
+  
+  const response = await api.post(`/analytics/user/survey-opt-in?${params.toString()}`);
   return response.data;
 }
 
