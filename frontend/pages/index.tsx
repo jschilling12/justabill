@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { getBills, getBillsVoteStats, Bill, VoteStats, BillStatus, BILL_STATUS_LABELS, ACTIVE_STATUSES, getPresidentForDate, PRESIDENTS, President, fetchEnactedByPresident, PRESIDENT_CONGRESS_MAP, getPopularBillsByPresident, PopularBillByPresident } from '../lib/api';
+import PopularBillsCarousel from '../components/PopularBillsCarousel';
 
 export default function Home() {
   const router = useRouter();
@@ -143,8 +144,8 @@ export default function Home() {
   const loadPopularBills = async () => {
     try {
       setLoadingPopular(true);
-      // Fetch top 3 popular bills (exclude enacted since those aren't for voting)
-      const data = await getBills(1, 3, true, undefined, undefined, 'enacted');
+      // Fetch top 6 popular bills for carousel (exclude enacted since those aren't for voting)
+      const data = await getBills(1, 6, true, undefined, undefined, 'enacted');
       setPopularBills(data.items);
       const stats = await getBillsVoteStats(data.items.map((b: Bill) => b.id));
       setStatsByBill((prev) => ({ ...prev, ...stats }));
@@ -354,12 +355,12 @@ export default function Home() {
         {activeTab === 'voting' ? (
           <>
 
-        {/* Popular Bills - Top 3 Featured */}
+        {/* Popular Bills - Top 6 Featured Carousel */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-bold text-gray-900">🔥 Popular now</h2>
             <p className="text-sm text-gray-500">
-              Bills with significant public attention
+              Bills with significant public attention • Scroll to see more
             </p>
           </div>
           {loadingPopular ? (
@@ -371,49 +372,10 @@ export default function Home() {
               No popular bills at the moment. Check back soon!
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {popularBills.map((bill, index) => (
-                <Link
-                  key={bill.id}
-                  href={`/bills/${bill.id}`}
-                  className={`block rounded-xl shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-1 ${
-                    index === 0 
-                      ? 'bg-gradient-to-br from-orange-50 to-red-50 border-2 border-orange-200' 
-                      : 'bg-white border border-gray-200'
-                  }`}
-                >
-                  <div className="p-5">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className={`text-2xl ${index === 0 ? '' : 'opacity-70'}`}>
-                        🔥
-                      </span>
-                      {bill.popularity_score && bill.popularity_score > 0 && (
-                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-orange-100 text-orange-800">
-                          🔥 {bill.popularity_score} mentions
-                        </span>
-                      )}
-                    </div>
-                    <h3 className={`font-bold text-gray-900 ${index === 0 ? 'text-lg' : 'text-base'}`}>
-                      {bill.bill_type.toUpperCase()}. {bill.bill_number}
-                    </h3>
-                    <p className={`mt-1 ${index === 0 ? 'text-sm text-gray-800' : 'text-xs text-gray-700'} line-clamp-3`}>
-                      {bill.title || 'Untitled'}
-                    </p>
-                    <div className="mt-3 flex items-center justify-between">
-                      <span className="text-xs text-gray-500 capitalize">
-                        {bill.status?.replace(/_/g, ' ') || 'Status unknown'}
-                      </span>
-                      <span className="text-xs font-medium text-blue-600 flex items-center gap-1">
-                        Vote now →
-                      </span>
-                    </div>
-                    <div className="mt-2">
-                      {renderVotePreview(bill.id)}
-                    </div>
-                  </div>
-                </Link>
-              ))}
-            </div>
+            <PopularBillsCarousel 
+              bills={popularBills} 
+              renderVotePreview={renderVotePreview} 
+            />
           )}
         </div>
 
